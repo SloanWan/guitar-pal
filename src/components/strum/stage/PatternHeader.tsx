@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useShareGate, useWriteGate } from "@/components/offline/WriteGate";
 import { ListMusic, Loader2, Pencil, RotateCcw, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -53,6 +54,8 @@ export default function PatternHeader({
 	shared,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const gate = useWriteGate();
+	const shareGate = useShareGate();
 	const hasActions = onEdit || onDelete || onShare || onOpenLibrary || shared;
 
 	return (
@@ -71,12 +74,12 @@ export default function PatternHeader({
 						<RotateCcw aria-hidden />
 					</button>
 					{onSaveAsNew && (
-						<Button variant="secondary" size="xs" onClick={onSaveAsNew}>
+						<Button variant="secondary" size="xs" onClick={onSaveAsNew} disabled={gate.blocked} title={gate.reason}>
 							Save as new
 						</Button>
 					)}
 					{onSave && (
-						<Button size="xs" onClick={onSave}>
+						<Button size="xs" onClick={onSave} disabled={gate.blocked} title={gate.reason}>
 							Save
 						</Button>
 					)}
@@ -91,9 +94,9 @@ export default function PatternHeader({
 							className="st-icon"
 							data-anim="edit"
 							onClick={onEdit}
-							disabled={!owned}
+							disabled={!owned || gate.blocked}
 							aria-label="Edit this pattern"
-							title={owned ? "Edit this pattern" : "Presets can't be edited — change the rhythm and save a copy"}
+							title={gate.reason ?? (owned ? "Edit this pattern" : "Presets can't be edited — change the rhythm and save a copy")}
 						>
 							<Pencil aria-hidden />
 						</button>
@@ -104,10 +107,10 @@ export default function PatternHeader({
 							className="st-icon"
 							data-anim="share"
 							onClick={onShare}
-							disabled={sharing}
+							disabled={sharing || shareGate.blocked}
 							aria-busy={sharing || undefined}
 							aria-label="Share this pattern"
-							title={sharing ? "Making the link…" : "Copy a link to this pattern"}
+							title={shareGate.reason ?? (sharing ? "Making the link…" : "Copy a link to this pattern")}
 						>
 							{sharing ? <Loader2 aria-hidden className="animate-spin" /> : <Share2 aria-hidden />}
 						</button>
@@ -120,9 +123,9 @@ export default function PatternHeader({
 									className="st-icon"
 									data-tone="bad"
 									data-anim="delete"
-									disabled={!owned}
+									disabled={!owned || gate.blocked}
 									aria-label="Delete this pattern"
-									title={owned ? "Delete this pattern" : "Presets can't be deleted"}
+									title={gate.reason ?? (owned ? "Delete this pattern" : "Presets can't be deleted")}
 								>
 									<Trash2 aria-hidden />
 								</button>

@@ -1,6 +1,9 @@
 "use client";
 
 import "@/components/fingerpick/reader/tab.css";
+import { useOnline } from "@/hooks/useOnline";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
+import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
 import "@/components/playback/icons.css";
 import "@/components/playback/playback.css";
 import "./tabEdit.css";
@@ -73,6 +76,8 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const entry = useMemo(() => readEditorEntry(id, search), [id, search]);
 	const { user, loading } = useUser();
 	const library = useFingerpickPatterns(user, loading);
+	// The page provides the write gate, so it asks the same question itself (#469).
+	const offlineBlocked = writesBlocked(user, useOnline());
 	const prefs = useFingerpickPrefs();
 
 	const { working, commit, undo, redo, canUndo, canRedo, reset } = useEditHistory(makeDefaultPattern);
@@ -159,6 +164,8 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 			toast.error(error);
 			return;
 		}
+		// Before anything is cleared or left: offline, the edits stay here, unsaved (#469).
+		if (!target && refuseOfflineWrite(user)) return;
 		setSaving(true);
 		const tab = { ...working, name: working.name.trim(), bpm: clampBpmToMeter(working.bpm, working.timeSignature) };
 		if (target) {
@@ -377,260 +384,299 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const leaveName = named ? `“${working.name.trim()}”` : "this tab";
 
 	return (
-		<div className="te-page" data-m="tab">
-			<div className="te-body">
-				{crop && !wideSource && (
-					<aside className="te-src" aria-label="Source page">
-						<div className="te-src-head">Page {page}</div>
-						<div className="te-src-img">
-							<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
-						</div>
-					</aside>
-				)}
-				<div className="te-main">
-					<div className="te-stage" ref={stageRef}>
-						<div className="te-stage-in gp-rise">
-							{!ready ? (
-								<>
-									<div className="te-titlerow" aria-busy="true" aria-label="Loading">
-										<Skeleton className="te-sk-meta" />
-										<Skeleton className="te-sk-name" />
-									</div>
-									<div className="te-toolbay" aria-hidden>
-										<Skeleton className="te-sk-tool" />
-									</div>
-									<Skeleton className="te-sk-bar" />
-								</>
-							) : (
-								<>
-									{notice && (
-										<div className="te-notice" role="note">
-											<div className="te-notice-top">
-												<b>{notice.title}</b>
-												{notice.warnings && notice.warnings.length > 0 && (
-													<button
-														type="button"
-														className="te-warnchip"
-														aria-expanded={warningsOpen}
-														onClick={() => setWarningsOpen((on) => !on)}
-													>
-														<TriangleAlert aria-hidden />
-														{notice.warnings.length} {notice.warnings.length === 1 ? "warning" : "warnings"}
-													</button>
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="te-page" data-m="tab">
+				<div className="te-body">
+					{crop && !wideSource && (
+						<aside className="te-src" aria-label="Source page">
+							<div className="te-src-head">Page {page}</div>
+							<div className="te-src-img">
+								<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+							</div>
+						</aside>
+					)}
+					<div className="te-main">
+						<div className="te-stage" ref={stageRef}>
+							<div className="te-stage-in gp-rise">
+								{!ready ? (
+									<>
+										<div className="te-titlerow" aria-busy="true" aria-label="Loading">
+											<Skeleton className="te-sk-meta" />
+											<Skeleton className="te-sk-name" />
+										</div>
+										<div className="te-toolbay" aria-hidden>
+											<Skeleton className="te-sk-tool" />
+										</div>
+										<Skeleton className="te-sk-bar" />
+									</>
+								) : (
+									<>
+										{notice && (
+											<div className="te-notice" role="note">
+												<div className="te-notice-top">
+													<b>{notice.title}</b>
+													{notice.warnings && notice.warnings.length > 0 && (
+														<button
+															type="button"
+															className="te-warnchip"
+															aria-expanded={warningsOpen}
+															onClick={() => setWarningsOpen((on) => !on)}
+														>
+															<TriangleAlert aria-hidden />
+															{notice.warnings.length} {notice.warnings.length === 1 ? "warning" : "warnings"}
+														</button>
+													)}
+													<span className="tb-grow" />
+													{crop && !wideSource && (
+														<Button
+															variant="secondary"
+															size="xs"
+															className="te-srcfold-btn"
+															aria-expanded={cropOpen}
+															onClick={() => setCropOpen((on) => !on)}
+														>
+															{cropOpen ? "Hide the page" : "Show the page"}
+														</Button>
+													)}
+												</div>
+												<p>{notice.text}</p>
+												{warningsOpen && notice.warnings && (
+													<ul>
+														{notice.warnings.map((w) => (
+															<li key={w}>{w}</li>
+														))}
+													</ul>
 												)}
-												<span className="tb-grow" />
-												{crop && !wideSource && (
-													<Button
-														variant="secondary"
-														size="xs"
-														className="te-srcfold-btn"
-														aria-expanded={cropOpen}
-														onClick={() => setCropOpen((on) => !on)}
-													>
-														{cropOpen ? "Hide the page" : "Show the page"}
-													</Button>
+												{crop && cropOpen && (
+													<div className="te-srcfold te-srcfold-btn">
+														<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+													</div>
 												)}
 											</div>
-											<p>{notice.text}</p>
-											{warningsOpen && notice.warnings && (
-												<ul>
-													{notice.warnings.map((w) => (
-														<li key={w}>{w}</li>
-													))}
-												</ul>
-											)}
-											{crop && cropOpen && (
-												<div className="te-srcfold te-srcfold-btn">
-													<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
-												</div>
-											)}
-										</div>
-									)}
-									<div className="te-titlerow">
-										<div className="te-meta">
-											<span className="pb-lab pb-num">{meta}</span>
-											<span className="te-unsaved" hidden={!dirty}>
-												Unsaved
-											</span>
-											{!named && <span className="te-savewhy">Name it to save</span>}
-										</div>
-										<button
-											type="button"
-											className="te-name"
-											data-empty={named ? undefined : ""}
-											onClick={() => setSettingsOpen(true)}
-											title="Name, tempo, capo and meter"
-										>
-											{heading}
-										</button>
-										<div className="te-acts">
+										)}
+										<div className="te-titlerow">
+											<div className="te-meta">
+												<span className="pb-lab pb-num">{meta}</span>
+												<span className="te-unsaved" hidden={!dirty}>
+													Unsaved
+												</span>
+												{!named && <span className="te-savewhy">Name it to save</span>}
+											</div>
 											<button
 												type="button"
-												className="pb-icon te-mid-up"
-												onClick={undo}
-												disabled={!canUndo}
-												aria-label="Undo"
-												title="Undo (⌘Z)"
-											>
-												<Undo2 aria-hidden />
-											</button>
-											<button
-												type="button"
-												className="pb-icon te-mid-up"
-												onClick={redo}
-												disabled={!canRedo}
-												aria-label="Redo"
-												title="Redo (⌘⇧Z)"
-											>
-												<Redo2 aria-hidden />
-											</button>
-											<button
-												type="button"
-												className="pb-icon"
+												className="te-name"
+												data-empty={named ? undefined : ""}
 												onClick={() => setSettingsOpen(true)}
-												aria-expanded={settingsOpen}
-												aria-label="Tab settings"
 												title="Name, tempo, capo and meter"
 											>
-												<SlidersHorizontal aria-hidden />
+												{heading}
 											</button>
-											<span className="te-vsep te-mid-up" aria-hidden />
-											<Button variant="secondary" size="xs" className="te-mid-up" onClick={() => guard.request(back)}>
-												Close
-											</Button>
-											<button
-												type="button"
-												className="pb-icon te-phone-only"
-												onClick={() => guard.request(back)}
-												aria-label="Close the editor"
-											>
-												<X aria-hidden />
-											</button>
-											<Button
-												size="xs"
-												onClick={() => void save()}
-												loading={saving}
-												disabled={!named || (!target && library.isLoading)}
-												title={
-													!named
-														? "Name the tab to save it"
-														: target
-															? target.saveTitle
-															: library.isLoading
-																? "Loading your tabs…"
-																: "Save to your tabs"
-												}
-											>
-												Save
-											</Button>
-										</div>
-									</div>
-									<div className="te-toolbay" ref={toolbayRef}>
-										<EditorToolbar
-											working={working}
-											commit={commit}
-											cursor={cursor}
-											slots={selectedSlots(working, cursor, selection)}
-											onBlocked={(reason) => toast(reason)}
-											onBar={(measureIndex) =>
-												tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
-											}
-											onMerged={(at) => tabCursor.pickSlot({ ...at, stringIndex: cursor.stringIndex }, false)}
-										/>
-									</div>
-									{pinned && (
-										<div
-											className="te-srcpin"
-											ref={pinRef}
-											// Panning or zooming the source must not take the keys from the tab.
-											onPointerDown={() => {
-												const tab = tabRef.current;
-												keysOnTab.current = !!tab && tab.contains(document.activeElement);
-											}}
-											onPointerUp={() => {
-												if (keysOnTab.current) tabRef.current?.focus({ preventScroll: true });
-											}}
-										>
-											<div className="te-srcwide">
-												<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+											<div className="te-acts">
+												<button
+													type="button"
+													className="pb-icon te-mid-up"
+													onClick={undo}
+													disabled={!canUndo}
+													aria-label="Undo"
+													title="Undo (⌘Z)"
+												>
+													<Undo2 aria-hidden />
+												</button>
+												<button
+													type="button"
+													className="pb-icon te-mid-up"
+													onClick={redo}
+													disabled={!canRedo}
+													aria-label="Redo"
+													title="Redo (⌘⇧Z)"
+												>
+													<Redo2 aria-hidden />
+												</button>
+												<button
+													type="button"
+													className="pb-icon"
+													onClick={() => setSettingsOpen(true)}
+													aria-expanded={settingsOpen}
+													aria-label="Tab settings"
+													title="Name, tempo, capo and meter"
+												>
+													<SlidersHorizontal aria-hidden />
+												</button>
+												<span className="te-vsep te-mid-up" aria-hidden />
+												<Button variant="secondary" size="xs" className="te-mid-up" onClick={() => guard.request(back)}>
+													Close
+												</Button>
+												<button
+													type="button"
+													className="pb-icon te-phone-only"
+													onClick={() => guard.request(back)}
+													aria-label="Close the editor"
+												>
+													<X aria-hidden />
+												</button>
+												<Button
+													size="xs"
+													onClick={() => void save()}
+													loading={saving}
+													disabled={!named || (!target && (library.isLoading || offlineBlocked))}
+													title={
+														!named
+															? "Name the tab to save it"
+															: target
+																? target.saveTitle
+																: offlineBlocked
+																	? OFFLINE_WRITE_REASON
+																	: library.isLoading
+																		? "Loading your tabs…"
+																		: "Save to your tabs"
+													}
+												>
+													Save
+												</Button>
 											</div>
 										</div>
-									)}
-									<div
-										ref={tabRef}
-										className="te-sheet"
-										role="application"
-										aria-label="Tab. Click a cell to place the cursor, then type a fret."
-										tabIndex={0}
-										onKeyDown={tabCursor.onKeyDown}
-									>
-										<MeasureGrid
-											ref={gridRef}
-											working={working}
-											commit={commit}
-											cursor={cursor}
-											selection={selection}
-											block={block}
-											chordTools={chordTools}
-											countEighths={prefs.countEighths}
-											onPick={gridPick}
-											onColumn={gridColumn}
-											onMenu={gridMenu}
-											onBar={gridBar}
-											onBlank={gridBlank}
-										/>
-									</div>
-								</>
+										<div className="te-toolbay" ref={toolbayRef}>
+											<EditorToolbar
+												working={working}
+												commit={commit}
+												cursor={cursor}
+												slots={selectedSlots(working, cursor, selection)}
+												onBlocked={(reason) => toast(reason)}
+												onBar={(measureIndex) =>
+													tabCursor.moveTo({ measureIndex, slotIndex: 0, stringIndex: cursor.stringIndex })
+												}
+												onMerged={(at) => tabCursor.pickSlot({ ...at, stringIndex: cursor.stringIndex }, false)}
+											/>
+										</div>
+										{pinned && (
+											<div
+												className="te-srcpin"
+												ref={pinRef}
+												// Panning or zooming the source must not take the keys from the tab.
+												onPointerDown={() => {
+													const tab = tabRef.current;
+													keysOnTab.current = !!tab && tab.contains(document.activeElement);
+												}}
+												onPointerUp={() => {
+													if (keysOnTab.current) tabRef.current?.focus({ preventScroll: true });
+												}}
+											>
+												<div className="te-srcwide">
+													<ZoomableImage src={crop} alt={`Page ${page} of the book`} />
+												</div>
+											</div>
+										)}
+										<div
+											ref={tabRef}
+											className="te-sheet"
+											role="application"
+											aria-label="Tab. Click a cell to place the cursor, then type a fret."
+											tabIndex={0}
+											onKeyDown={tabCursor.onKeyDown}
+										>
+											<MeasureGrid
+												ref={gridRef}
+												working={working}
+												commit={commit}
+												cursor={cursor}
+												selection={selection}
+												block={block}
+												chordTools={chordTools}
+												countEighths={prefs.countEighths}
+												onPick={gridPick}
+												onColumn={gridColumn}
+												onMenu={gridMenu}
+												onBar={gridBar}
+												onBlank={gridBlank}
+											/>
+										</div>
+									</>
+								)}
+							</div>
+						</div>
+						<div className="te-status">
+							<button
+								type="button"
+								className="te-play"
+								onClick={() => togglePlay(cursor)}
+								disabled={!ready || !(playback.isLoaded || playback.loadFailed)}
+								aria-label={playback.isPlaying ? "Stop" : "Play from the cursor"}
+								title={playback.isPlaying ? "Stop (Space)" : "Play from the cursor (Space)"}
+							>
+								{playback.isPlaying ? <Square aria-hidden /> : <Play aria-hidden />}
+							</button>
+							<span className="te-status-pos pb-num" role="status" aria-label="Cursor">
+								{statusPos}
+							</span>
+							<span className="te-status-note pb-num" data-pending={pending ? "" : undefined}>
+								{statusNote}
+							</span>
+							<span className="tb-grow" />
+							{narrow && (
+								<Button size="xs" onClick={() => setToolsOpen(true)} disabled={!ready}>
+									<Wrench aria-hidden />
+									Tools
+								</Button>
 							)}
 						</div>
+						{/* An instrument with nothing to load: there from the start, and only
+						    taking clicks once the tab is open. */}
+						<div className="contents" inert={!ready}>
+							<FretboardDock
+								pattern={working}
+								cursor={cursor}
+								capo={patternCapo(working)}
+								hints={chordTools.hintsAt(cursor.measureIndex, cursor.slotIndex)}
+								paged={phone}
+								labels={prefs.dockLabels}
+								onLabels={prefs.setDockLabels}
+								autoAdvance={autoAdvance}
+								onAutoAdvance={prefs.setAutoAdvance}
+								open={prefs.dockOpen}
+								onOpen={prefs.setDockOpen}
+								onHit={dockHit}
+							/>
+						</div>
 					</div>
-					<div className="te-status">
-						<button
-							type="button"
-							className="te-play"
-							onClick={() => togglePlay(cursor)}
-							disabled={!ready || !(playback.isLoaded || playback.loadFailed)}
-							aria-label={playback.isPlaying ? "Stop" : "Play from the cursor"}
-							title={playback.isPlaying ? "Stop (Space)" : "Play from the cursor (Space)"}
-						>
-							{playback.isPlaying ? <Square aria-hidden /> : <Play aria-hidden />}
-						</button>
-						<span className="te-status-pos pb-num" role="status" aria-label="Cursor">
-							{statusPos}
-						</span>
-						<span className="te-status-note pb-num" data-pending={pending ? "" : undefined}>
-							{statusNote}
-						</span>
-						<span className="tb-grow" />
-						{narrow && (
-							<Button size="xs" onClick={() => setToolsOpen(true)} disabled={!ready}>
-								<Wrench aria-hidden />
-								Tools
-							</Button>
-						)}
-					</div>
-					{/* An instrument with nothing to load: there from the start, and only
-					    taking clicks once the tab is open. */}
-					<div className="contents" inert={!ready}>
-						<FretboardDock
-							pattern={working}
-							cursor={cursor}
-							capo={patternCapo(working)}
-							hints={chordTools.hintsAt(cursor.measureIndex, cursor.slotIndex)}
-							paged={phone}
-							labels={prefs.dockLabels}
-							onLabels={prefs.setDockLabels}
-							autoAdvance={autoAdvance}
-							onAutoAdvance={prefs.setAutoAdvance}
-							open={prefs.dockOpen}
-							onOpen={prefs.setDockOpen}
-							onHit={dockHit}
-						/>
-					</div>
+					{!narrow && (
+						<aside ref={inspectorRef} className="te-insp gp-rise" aria-label="Inspector">
+							{ready ? (
+								<EditorInspector
+									working={working}
+									commit={commit}
+									cursor={cursor}
+									slots={selectedSlots(working, cursor, selection)}
+									notes={editNotes}
+									onSkipped={(message) => toast(message)}
+									onCursor={(cell) => tabCursor.moveTo(cell, selection)}
+									chordTools={chordTools}
+								/>
+							) : (
+								<div className="te-sk-insp" aria-hidden>
+									<Skeleton className="te-sk-meta" />
+									<Skeleton className="te-sk-chips" />
+									<Skeleton className="te-sk-chips" />
+									<Skeleton className="te-sk-panel" />
+								</div>
+							)}
+						</aside>
+					)}
 				</div>
-				{!narrow && (
-					<aside ref={inspectorRef} className="te-insp gp-rise" aria-label="Inspector">
-						{ready ? (
+				{ready && narrow && (
+					<Sheet open={toolsOpen} onOpenChange={setToolsOpen} title="Tools">
+						<div className="te-sheet-tools" data-m="tab">
+							<Segmented
+								label="Tools"
+								full
+								options={[
+									{ value: "note", label: "Note" },
+									{ value: "effects", label: "Effects" },
+									{ value: "slot", label: "Slot" },
+									{ value: "bar", label: "Bar" },
+								]}
+								value={toolsTab}
+								onChange={setToolsTab}
+							/>
 							<EditorInspector
 								working={working}
 								commit={commit}
@@ -640,74 +686,39 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 								onSkipped={(message) => toast(message)}
 								onCursor={(cell) => tabCursor.moveTo(cell, selection)}
 								chordTools={chordTools}
+								only={toolsTab}
 							/>
-						) : (
-							<div className="te-sk-insp" aria-hidden>
-								<Skeleton className="te-sk-meta" />
-								<Skeleton className="te-sk-chips" />
-								<Skeleton className="te-sk-chips" />
-								<Skeleton className="te-sk-panel" />
-							</div>
-						)}
-					</aside>
+						</div>
+					</Sheet>
 				)}
+
+				{ready && (
+					<TabSettingsSheet
+						open={settingsOpen}
+						onOpenChange={setSettingsOpen}
+						working={working}
+						commit={commit}
+						takenNames={takenNames}
+						countEighths={prefs.countEighths}
+						onCountEighths={prefs.setCountEighths}
+					/>
+				)}
+
+				<Dialog open={guard.attempt !== null} onOpenChange={(open) => (open ? undefined : guard.keep())}>
+					<DialogContent role="alertdialog" data-m="tab" showCloseButton={false} className="te-leave sm:max-w-90">
+						<DialogTitle>Discard changes?</DialogTitle>
+						<DialogDescription>Your edits to {leaveName} aren&apos;t saved. Leaving now throws them away.</DialogDescription>
+						<div className="te-leave-row">
+							<Button variant="secondary" size="sm" onClick={guard.keep}>
+								Keep editing
+							</Button>
+							<Button variant="danger" size="sm" onClick={discardDraft}>
+								Discard
+							</Button>
+						</div>
+					</DialogContent>
+				</Dialog>
 			</div>
-			{ready && narrow && (
-				<Sheet open={toolsOpen} onOpenChange={setToolsOpen} title="Tools">
-					<div className="te-sheet-tools" data-m="tab">
-						<Segmented
-							label="Tools"
-							full
-							options={[
-								{ value: "note", label: "Note" },
-								{ value: "effects", label: "Effects" },
-								{ value: "slot", label: "Slot" },
-								{ value: "bar", label: "Bar" },
-							]}
-							value={toolsTab}
-							onChange={setToolsTab}
-						/>
-						<EditorInspector
-							working={working}
-							commit={commit}
-							cursor={cursor}
-							slots={selectedSlots(working, cursor, selection)}
-							notes={editNotes}
-							onSkipped={(message) => toast(message)}
-							onCursor={(cell) => tabCursor.moveTo(cell, selection)}
-							chordTools={chordTools}
-							only={toolsTab}
-						/>
-					</div>
-				</Sheet>
-			)}
-
-			{ready && (
-				<TabSettingsSheet
-					open={settingsOpen}
-					onOpenChange={setSettingsOpen}
-					working={working}
-					commit={commit}
-					takenNames={takenNames}
-					countEighths={prefs.countEighths}
-					onCountEighths={prefs.setCountEighths}
-				/>
-			)}
-
-			<Dialog open={guard.attempt !== null} onOpenChange={(open) => (open ? undefined : guard.keep())}>
-				<DialogContent role="alertdialog" data-m="tab" showCloseButton={false} className="te-leave sm:max-w-90">
-					<DialogTitle>Discard changes?</DialogTitle>
-					<DialogDescription>Your edits to {leaveName} aren&apos;t saved. Leaving now throws them away.</DialogDescription>
-					<div className="te-leave-row">
-						<Button variant="secondary" size="sm" onClick={guard.keep}>
-							Keep editing
-						</Button>
-						<Button variant="danger" size="sm" onClick={discardDraft}>
-							Discard
-						</Button>
-					</div>
-				</DialogContent>
-			</Dialog>
-		</div>
+		</WriteGateProvider>
 	);
 }

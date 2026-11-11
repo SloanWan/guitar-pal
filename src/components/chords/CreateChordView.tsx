@@ -1,6 +1,9 @@
 "use client";
 
 import "./create.css";
+import { useOnline } from "@/hooks/useOnline";
+import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { useState } from "react";
 import { ChevronLeft, Play } from "lucide-react";
 import Link from "@/components/AppLink";
@@ -44,6 +47,8 @@ interface Props {
 
 export default function CreateChordView({ frets, written, guesses }: Props) {
 	const { user, loading: userLoading } = useUser();
+	// The page provides the write gate, so it asks the same question itself (#469).
+	const offlineBlocked = writesBlocked(user, useOnline());
 	const { voicings: userVoicings, saveVoicing } = useUserChordVoicings(user, userLoading);
 	const preview = useChordPreview();
 
@@ -79,6 +84,8 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 
 	function create() {
 		if (!identity || !valid) return;
+		// Before the "created" state: a shape refused offline was not saved (#469).
+		if (refuseOfflineWrite(user)) return;
 		// Editing keeps the id, so anything pinned to this shape stays pinned to it.
 		const voicing: UserChordVoicing = {
 			...chordShapeToVoicing(shape, editing && mine ? mine.id : userVoicingId(crypto.randomUUID()), shapeName.trim() || null),
@@ -151,127 +158,129 @@ export default function CreateChordView({ frets, written, guesses }: Props) {
 	}
 
 	return (
-		<div className="wr-page">
-			<div className="wr-in gp-rise">
-				{editing && mine
-					? header(
-							`Edit ${withGlyphs(chordSymbol(mine.root, mine.suffix))}`,
-							"You already wrote this one. Rename it, refile it, or redraw it — it keeps its place wherever you have used it.",
-						)
-					: header(
-							"Write a chord",
-							<>
-								Nothing in the library is held like <b className="wr-tab">{written}</b>. Name it and it is yours —
-								searchable, playable, and there next time.
-							</>,
-						)}
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="wr-page">
+				<div className="wr-in gp-rise">
+					{editing && mine
+						? header(
+								`Edit ${withGlyphs(chordSymbol(mine.root, mine.suffix))}`,
+								"You already wrote this one. Rename it, refile it, or redraw it — it keeps its place wherever you have used it.",
+							)
+						: header(
+								"Write a chord",
+								<>
+									Nothing in the library is held like <b className="wr-tab">{written}</b>. Name it and it is yours —
+									searchable, playable, and there next time.
+								</>,
+							)}
 
-				<div className="wr-cols">
-					<section className="wr-panel" aria-label="The shape">
-						<h2>The shape</h2>
-						<ChordShapeEditor shape={shape} onChange={setShape} />
-						<div className="wr-actions">
-							<Button
-								variant="secondary"
-								size="sm"
-								onClick={() => void preview.play(voicingPitches(chordShapeToVoicing(shape, "preview")))}
-							>
-								<Play aria-hidden />
-								Hear it
-							</Button>
-						</div>
-					</section>
-
-					<div className="wr-side">
-						{!editing && (
-							<section className="wr-guess" aria-label="What the notes say">
-								<span className="wr-label">
-									{guesses.length === 0
-										? "Nothing in the library has these notes"
-										: guesses[0].exact
-											? "Those notes are"
-											: "Nothing has exactly those notes — closest"}
-								</span>
-								{guesses.length > 0 && (
-									<div className="wr-chips">
-										{guesses.map((guess) => {
-											const name = chordDisplayName(guess.root, guess.suffix);
-											return (
-												<Chip key={name} pressed={chordName === name} title={`Call it ${name}`} onPressedChange={() => setChordName(name)}>
-													{withGlyphs(chordSymbol(guess.root, guess.suffix))}
-												</Chip>
-											);
-										})}
-									</div>
-								)}
-								{/* The notes themselves, lowest first: when nothing can be named, the most useful thing to say. */}
-								{notes.length > 0 && (
-									<ol className="wr-notes" aria-label="The notes, lowest first">
-										{notes.map((note) => (
-											<li key={note}>{withGlyphs(note)}</li>
-										))}
-									</ol>
-								)}
-								<Button variant="ghost" size="xs" className="wr-unknown" onClick={nameItUnknown}>
-									I don&rsquo;t know what it is — call it {unknownName}
-								</Button>
-							</section>
-						)}
-
-						<section className="wr-panel" aria-label="Name and file">
-							<Field
-								label="What is this chord called?"
-								help={identity ? `Files as ${chordDisplayName(identity.root, identity.suffix)}.` : "Typed the way search reads it, so it can be typed back later."}
-								error={identity || chordName.trim() === "" ? undefined : "Start with a note — C, F♯, B♭ — then the quality."}
-							>
-								{(control) => (
-									<Input
-										{...control}
-										type="text"
-										value={chordName}
-										onChange={(e) => setChordName(e.target.value)}
-										placeholder="e.g. Cadd9#11"
-										aria-label="Chord name"
-									/>
-								)}
-							</Field>
-							<Field label="Name this shape (optional)">
-								{(control) => (
-									<Input
-										{...control}
-										type="text"
-										value={shapeName}
-										onChange={(e) => setShapeName(e.target.value)}
-										placeholder="e.g. up at the seventh"
-										aria-label="Name for this shape"
-									/>
-								)}
-							</Field>
-							<div className="wr-file">
-								<span className="wr-label">File it under</span>
-								<div className="wr-chips" role="group" aria-label="File it under">
-									{[null, ...browseCategories()].map((option) => (
-										<Chip key={option ?? UNFILED} pressed={option === category} onPressedChange={() => setCategory(option)}>
-											{option ?? UNFILED}
-										</Chip>
-									))}
-								</div>
-								<span className="wr-meta">
-									Where it sits when you browse the picker by category. {UNFILED} keeps it in your own section.
-								</span>
-							</div>
+					<div className="wr-cols">
+						<section className="wr-panel" aria-label="The shape">
+							<h2>The shape</h2>
+							<ChordShapeEditor shape={shape} onChange={setShape} />
 							<div className="wr-actions">
-								<Button disabled={!valid} onClick={create}>
-									{editing ? "Save changes" : "Create chord"}
-								</Button>
-								<Button asChild variant="ghost" size="sm">
-									<Link href="/chords">Cancel</Link>
+								<Button
+									variant="secondary"
+									size="sm"
+									onClick={() => void preview.play(voicingPitches(chordShapeToVoicing(shape, "preview")))}
+								>
+									<Play aria-hidden />
+									Hear it
 								</Button>
 							</div>
 						</section>
+
+						<div className="wr-side">
+							{!editing && (
+								<section className="wr-guess" aria-label="What the notes say">
+									<span className="wr-label">
+										{guesses.length === 0
+											? "Nothing in the library has these notes"
+											: guesses[0].exact
+												? "Those notes are"
+												: "Nothing has exactly those notes — closest"}
+									</span>
+									{guesses.length > 0 && (
+										<div className="wr-chips">
+											{guesses.map((guess) => {
+												const name = chordDisplayName(guess.root, guess.suffix);
+												return (
+													<Chip key={name} pressed={chordName === name} title={`Call it ${name}`} onPressedChange={() => setChordName(name)}>
+														{withGlyphs(chordSymbol(guess.root, guess.suffix))}
+													</Chip>
+												);
+											})}
+										</div>
+									)}
+									{/* The notes themselves, lowest first: when nothing can be named, the most useful thing to say. */}
+									{notes.length > 0 && (
+										<ol className="wr-notes" aria-label="The notes, lowest first">
+											{notes.map((note) => (
+												<li key={note}>{withGlyphs(note)}</li>
+											))}
+										</ol>
+									)}
+									<Button variant="ghost" size="xs" className="wr-unknown" onClick={nameItUnknown}>
+										I don&rsquo;t know what it is — call it {unknownName}
+									</Button>
+								</section>
+							)}
+
+							<section className="wr-panel" aria-label="Name and file">
+								<Field
+									label="What is this chord called?"
+									help={identity ? `Files as ${chordDisplayName(identity.root, identity.suffix)}.` : "Typed the way search reads it, so it can be typed back later."}
+									error={identity || chordName.trim() === "" ? undefined : "Start with a note — C, F♯, B♭ — then the quality."}
+								>
+									{(control) => (
+										<Input
+											{...control}
+											type="text"
+											value={chordName}
+											onChange={(e) => setChordName(e.target.value)}
+											placeholder="e.g. Cadd9#11"
+											aria-label="Chord name"
+										/>
+									)}
+								</Field>
+								<Field label="Name this shape (optional)">
+									{(control) => (
+										<Input
+											{...control}
+											type="text"
+											value={shapeName}
+											onChange={(e) => setShapeName(e.target.value)}
+											placeholder="e.g. up at the seventh"
+											aria-label="Name for this shape"
+										/>
+									)}
+								</Field>
+								<div className="wr-file">
+									<span className="wr-label">File it under</span>
+									<div className="wr-chips" role="group" aria-label="File it under">
+										{[null, ...browseCategories()].map((option) => (
+											<Chip key={option ?? UNFILED} pressed={option === category} onPressedChange={() => setCategory(option)}>
+												{option ?? UNFILED}
+											</Chip>
+										))}
+									</div>
+									<span className="wr-meta">
+										Where it sits when you browse the picker by category. {UNFILED} keeps it in your own section.
+									</span>
+								</div>
+								<div className="wr-actions">
+									<Button disabled={!valid || offlineBlocked} title={offlineBlocked ? OFFLINE_WRITE_REASON : undefined} onClick={create}>
+										{editing ? "Save changes" : "Create chord"}
+									</Button>
+									<Button asChild variant="ghost" size="sm">
+										<Link href="/chords">Cancel</Link>
+									</Button>
+								</div>
+							</section>
+						</div>
 					</div>
 				</div>
 			</div>
-		</div>
+		</WriteGateProvider>
 	);
 }

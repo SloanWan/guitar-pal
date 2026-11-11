@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +49,7 @@ export function useTapTempo(onTempo: (bpm: number) => void): () => void {
  */
 export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault, onSliding }: TempoProps) {
 	const marks = bpmFaderMarks(meter);
+	const gate = useWriteGate();
 	const set = (value: number) => onBpm(clampTempo(value, meter));
 	const tap = useTapTempo(set);
 	const nearest = marks.values.reduce(
@@ -89,7 +91,14 @@ export function TempoFields({ bpm, onBpm, meter, defaultBpm, onSaveDefault, onSl
 				</Button>
 				<span className="flex-1" />
 				{onSaveDefault && (
-					<Button variant="secondary" size="xs" disabled={!changed} onClick={onSaveDefault} className="pb-num">
+					<Button
+						variant="secondary"
+						size="xs"
+						disabled={!changed || gate.blocked}
+						onClick={onSaveDefault}
+						title={gate.reason}
+						className="pb-num"
+					>
 						Open at {bpm} from now on
 					</Button>
 				)}

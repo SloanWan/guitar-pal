@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { refuseOfflineWrite } from "@/lib/offline/writes";
+import { useLibraryCopy } from "@/hooks/useLibraryCopy";
 import type { User } from "@supabase/supabase-js";
 import { dedupeUserVoicing, type UserChordVoicing } from "@/lib/userChordVoicings";
 import {
@@ -75,6 +77,8 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 	 */
 	const saveVoicing = useCallback(
 		(voicing: UserChordVoicing): UserChordVoicing => {
+			// Refused offline, the shape comes back unsaved; the controls that save one are disabled then.
+			if (refuseOfflineWrite(user)) return voicing;
 			const stored = dedupeUserVoicing(voicings, voicing);
 			const next = voicings.some((v) => v.id === stored.id)
 				? voicings.map((v) => (v.id === stored.id ? stored : v))
@@ -93,6 +97,7 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 
 	const deleteVoicing = useCallback(
 		(id: string) => {
+			if (refuseOfflineWrite(user)) return;
 			const next = voicings.filter((v) => v.id !== id);
 			setVoicings(next);
 			commitLocal(next);
@@ -104,6 +109,9 @@ export function useUserChordVoicings(user: User | null, loading: boolean) {
 		},
 		[user, voicings, commitLocal],
 	);
+
+	// This device's copy, kept in step with the page's writes (#469).
+	useLibraryCopy("chordVoicings", userId, voicings, !voicingsLoading);
 
 	return { voicings, voicingsLoading, saveVoicing, deleteVoicing };
 }

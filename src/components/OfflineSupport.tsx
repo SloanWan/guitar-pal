@@ -3,13 +3,25 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase";
+import { forgetAccountCopies } from "@/lib/offline/libraryCopy";
+import { forgetRememberedUser } from "@/lib/offline/rememberedUser";
 import { accountChanged, accountToRecord, CACHED_ACCOUNT_KEY, forgetKeptPages, serviceWorkerUrl } from "@/lib/pwa/offline";
 
 const OFFLINE_TOAST = "offline";
 
+/** Whether the last account seen here is signed in; what the auth listener below records. */
+function signedInHere(): boolean {
+	try {
+		return Boolean(localStorage.getItem(CACHED_ACCOUNT_KEY));
+	} catch {
+		return false;
+	}
+}
+
 /**
- * Offline use (#468): registers the service worker, empties its kept pages
- * when the account changes, and says so while the browser is offline.
+ * Offline use (#468, #469): registers the service worker, empties its kept
+ * pages and the library copies of the account left when the account changes,
+ * and says so while the browser is offline.
  *
  * The worker runs in production builds only. In development it would keep
  * serving build files a rebuild has changed, so a worker left over from a
@@ -39,7 +51,6 @@ export default function OfflineSupport() {
 	}, []);
 
 	useEffect(() => {
-		if (!("caches" in window)) return;
 		const {
 			data: { subscription },
 		} = createClient().auth.onAuthStateChange((event, session) => {
@@ -52,17 +63,26 @@ export default function OfflineSupport() {
 			} catch {
 				// No storage: nothing recorded, so the pages are forgotten on every account seen — the safe side.
 			}
-			if (accountChanged(recorded, event, current)) forgetKeptPages(caches).catch(() => undefined);
+			if (accountChanged(recorded, event, current)) {
+				if ("caches" in window) forgetKeptPages(caches).catch(() => undefined);
+				// The library copies are per account already; the one signed out of has no business staying (#469).
+				if (recorded) void forgetAccountCopies(recorded);
+			}
+			if (event === "SIGNED_OUT") forgetRememberedUser();
 		});
 		return () => subscription.unsubscribe();
 	}, []);
 
 	useEffect(() => {
+		// A disabled button shows no title, so this line is where a signed-in
+		// player learns why their library cannot be changed (#469).
 		const show = () =>
-			toast("You're offline. Pages opened on this device and the sounds still work.", {
-				id: OFFLINE_TOAST,
-				duration: Infinity,
-			});
+			toast(
+				signedInHere()
+					? "You're offline. Your library is read-only until you're back; the sounds still play."
+					: "You're offline. Pages opened on this device and the sounds still work.",
+				{ id: OFFLINE_TOAST, duration: Infinity },
+			);
 		const hide = () => toast.dismiss(OFFLINE_TOAST);
 		if (!navigator.onLine) show();
 		window.addEventListener("offline", show);

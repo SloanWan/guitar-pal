@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Globe, Link2, MonitorPlay, Music, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,9 +44,12 @@ export default function TabReferences({ references, editable, onChange }: Props)
 	const [label, setLabel] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const urlRef = useRef<HTMLInputElement>(null);
+	const gate = useWriteGate();
 	if (!editable && references.length === 0) return null;
 
 	const full = references.length >= MAX_REFERENCES;
+	// Offline the links can be read and opened, not changed (#469).
+	const locked = full || gate.blocked;
 	const count = references.length;
 
 	function add(e: FormEvent) {
@@ -99,8 +103,9 @@ export default function TabReferences({ references, editable, onChange }: Props)
 											type="button"
 											className="pb-icon tb-ref-remove"
 											onClick={() => onChange(references.filter((r) => r.id !== ref.id))}
+											disabled={gate.blocked}
 											aria-label={`Remove ${title}`}
-											title="Remove"
+											title={gate.reason ?? "Remove"}
 										>
 											<X aria-hidden />
 										</button>
@@ -126,7 +131,7 @@ export default function TabReferences({ references, editable, onChange }: Props)
 							placeholder="Paste a link"
 							aria-label="Link"
 							aria-invalid={error ? true : undefined}
-							disabled={full}
+							disabled={locked}
 						/>
 						<div className="tb-refs-row">
 							<Input
@@ -135,15 +140,17 @@ export default function TabReferences({ references, editable, onChange }: Props)
 								placeholder="Name (optional)"
 								aria-label="Name"
 								maxLength={MAX_REFERENCE_LABEL}
-								disabled={full}
+								disabled={locked}
 							/>
-							<Button type="submit" variant="secondary" size="sm" disabled={full || !url.trim()}>
+							<Button type="submit" variant="secondary" size="sm" disabled={locked || !url.trim()}>
 								Add
 							</Button>
 						</div>
 						{/* One line, always there, so the card keeps its height. */}
 						<p className="tb-refs-note" data-error={error ? "" : undefined} role={error ? "alert" : undefined}>
-							{error ?? (full ? `A tab keeps up to ${MAX_REFERENCES} links.` : "YouTube, bilibili, Spotify, NetEase or any web page.")}
+							{error ??
+								gate.reason ??
+								(full ? `A tab keeps up to ${MAX_REFERENCES} links.` : "YouTube, bilibili, Spotify, NetEase or any web page.")}
 						</p>
 					</form>
 				)}

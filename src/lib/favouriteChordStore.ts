@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase";
 import { readFavourites, type FavouriteChord } from "@/lib/favouriteChords";
+import { readThrough } from "@/lib/offline/libraryCopy";
 
 /**
  * Where favourite chords are kept: this device's localStorage when signed out,
@@ -35,15 +36,17 @@ export function clearLocalFavourites(): void {
 	}
 }
 
-/** Oldest first, so the list reads in the order the chords were kept. */
+/** Oldest first, so the list reads in the order the chords were kept. Offline, this device's copy (#469). */
 export async function fetchAccountFavourites(userId: string): Promise<FavouriteChord[]> {
-	const { data, error } = await createClient()
-		.from("user_favourite_chords")
-		.select("root, suffix")
-		.eq("user_id", userId)
-		.order("created_at", { ascending: true });
-	if (error) throw new Error(error.message);
-	return readFavourites(data);
+	return readThrough("favouriteChords", userId, async () => {
+		const { data, error } = await createClient()
+			.from("user_favourite_chords")
+			.select("root, suffix")
+			.eq("user_id", userId)
+			.order("created_at", { ascending: true });
+		if (error) throw new Error(error.message);
+		return readFavourites(data);
+	});
 }
 
 /** Adds chords to the account; one already there stays as it was. */

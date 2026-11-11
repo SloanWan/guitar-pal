@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { ChevronDown, ListMusic, Plus, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ListRow } from "@/components/ui/list-row";
@@ -85,6 +86,7 @@ export default function ProgressionPanel({
 	const open = draft.progression;
 	const listRef = useRef<HTMLDivElement>(null);
 	const typingPicked = useRef(false);
+	const gate = useWriteGate();
 	const openId = open?.id ?? null;
 
 	// The chosen item is always in view in the list — a new one, a copy saved as new
@@ -185,7 +187,7 @@ export default function ProgressionPanel({
 				{!readOnly && (
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="secondary" size="xs" aria-label="Add progression">
+							<Button variant="secondary" size="xs" aria-label="Add progression" disabled={gate.blocked} title={gate.reason}>
 								<Plus aria-hidden />
 								Add
 							</Button>

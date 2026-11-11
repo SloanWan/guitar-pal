@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelRightClose, Plus } from "lucide-react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Button } from "@/components/ui/button";
 import { PRESET_STRUM_PATTERNS, type StrumPattern } from "@/lib/strumPatterns";
 import LibraryBrowser from "@/components/library/LibraryBrowser";
@@ -33,11 +34,19 @@ export default function PatternLibrary({
 	variant,
 	onFold,
 }: Props) {
+	const gate = useWriteGate();
 	return (
 		<>
 			<div className="flex items-center gap-1.5">
 				{variant === "aside" && <h2 className="m-0 flex-1 text-base font-bold">Patterns</h2>}
-				<Button variant="secondary" size="xs" onClick={onNew} className={variant === "sheet" ? "ml-auto" : undefined}>
+				<Button
+					variant="secondary"
+					size="xs"
+					onClick={onNew}
+					disabled={gate.blocked}
+					title={gate.reason}
+					className={variant === "sheet" ? "ml-auto" : undefined}
+				>
 					<Plus aria-hidden />
 					New
 				</Button>

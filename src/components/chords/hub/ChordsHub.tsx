@@ -1,6 +1,7 @@
 "use client";
 
 import "./hub.css";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { useMemo } from "react";
 import { useFavouriteChords } from "@/components/chords/useFavouriteChords";
 import { useUserChordVoicings } from "@/components/chords/useUserChordVoicings";
@@ -36,39 +37,41 @@ export default function ChordsHub({ view, root, quality, chords, index, board }:
 	const { items, transpose, capo, cards, update, setTranspose, setCapo } = useBoard(board, index, userVoicings);
 
 	return (
-		<div className="hb-page">
-			<div className="hb-in gp-rise">
-				<AskBar index={searchIndex} lookup={lookup} onAdd={(added) => update(addToBoard(items, added))} />
-				<Board
-					items={items}
-					cards={cards}
-					transpose={transpose}
-					capo={capo}
-					onChange={update}
-					onTranspose={setTranspose}
-					onCapo={setCapo}
-				/>
-				<HubLibrary
-					view={view}
-					root={root}
-					quality={quality}
-					chords={chords}
-					index={index}
-					userVoicings={userVoicings}
-					favourites={favourites}
-					onAdd={(added) => update(addToBoard(items, added))}
-				/>
-				<p className="hb-credit">
-					Voicing data via{" "}
-					<a href="https://github.com/tombatossals/chords-db" target="_blank" rel="noopener noreferrer">
-						tombatossals/chords-db
-					</a>{" "}
-					· audio samples via{" "}
-					<a href="https://github.com/surikov/webaudiofontdata" target="_blank" rel="noopener noreferrer">
-						WebAudioFont
-					</a>
-				</p>
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="hb-page">
+				<div className="hb-in gp-rise">
+					<AskBar index={searchIndex} lookup={lookup} onAdd={(added) => update(addToBoard(items, added))} />
+					<Board
+						items={items}
+						cards={cards}
+						transpose={transpose}
+						capo={capo}
+						onChange={update}
+						onTranspose={setTranspose}
+						onCapo={setCapo}
+					/>
+					<HubLibrary
+						view={view}
+						root={root}
+						quality={quality}
+						chords={chords}
+						index={index}
+						userVoicings={userVoicings}
+						favourites={favourites}
+						onAdd={(added) => update(addToBoard(items, added))}
+					/>
+					<p className="hb-credit">
+						Voicing data via{" "}
+						<a href="https://github.com/tombatossals/chords-db" target="_blank" rel="noopener noreferrer">
+							tombatossals/chords-db
+						</a>{" "}
+						· audio samples via{" "}
+						<a href="https://github.com/surikov/webaudiofontdata" target="_blank" rel="noopener noreferrer">
+							WebAudioFont
+						</a>
+					</p>
+				</div>
 			</div>
-		</div>
+		</WriteGateProvider>
 	);
 }

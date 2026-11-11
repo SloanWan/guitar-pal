@@ -52,6 +52,9 @@ export default defineConfig({
 		baseURL,
 		trace: "on-first-retry",
 		screenshot: "only-on-failure",
+		// The app's service worker (#468) would answer requests from its cache and
+		// hide them from `page.route`. Only the offline spec lets it run.
+		serviceWorkers: "block",
 	},
 	projects: [
 		{ name: "smoke", testDir: "e2e/smoke", use: chromium },

@@ -16,7 +16,10 @@ export function useUser(): { user: User | null; loading: boolean } {
 		});
 
 		const supabase = createClient();
-		const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+		const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+			// The first state is getUser's. Offline past the access token's life this
+			// event carries no session, and would make a signed-in player a guest (#469).
+			if (event === "INITIAL_SESSION") return;
 			setUser(session?.user ?? null);
 		});
 

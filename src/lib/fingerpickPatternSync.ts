@@ -4,6 +4,7 @@ import { normalizeLoadedPattern } from "./fingerpickEdit";
 import { patternCapo } from "./fingerpickChords";
 import { sortPatternsByNewest } from "./strumBars";
 import { readReferences } from "./tabReferences";
+import { readThrough } from "./offline/libraryCopy";
 
 // localStorage key for guest (logged-out) custom fingerpick patterns.
 export const LOCAL_FINGERPICK_PATTERNS_KEY = "customFingerpickPatterns";
@@ -79,21 +80,36 @@ function writeLocalFingerpickPatterns(patterns: FingerpickPattern[]): void {
 
 // ── Load ─────────────────────────────────────────────────────────────────────
 
-// Guest → localStorage; logged-in → `user_fingerpick_patterns` table.
+// Guest → localStorage; logged-in → `user_fingerpick_patterns` table, or offline
+// this device's copy of it (#469).
 export async function loadUserFingerpickPatterns(
 	supabase: SupabaseClient,
 	user: User | null,
 ): Promise<FingerpickPattern[]> {
 	if (!user) return sortPatternsByNewest(readLocalFingerpickPatterns());
 
-	const { data, error } = await supabase
-		.from("user_fingerpick_patterns")
-		.select("pattern_id, name, description, bpm, time_signature, measures, capo, spans, reference_links, created_at")
-		.eq("user_id", user.id);
-	if (error) throw new Error(error.message);
-	return sortPatternsByNewest(
-		(data ?? []).map((row) => rowToPattern(row as FingerpickPatternRow)),
-	);
+	return readThrough("fingerpickPatterns", user.id, async () => {
+		const { data, error } = await supabase
+			.from("user_fingerpick_patterns")
+			.select("pattern_id, name, description, bpm, time_signature, measures, capo, spans, reference_links, created_at")
+			.eq("user_id", user.id);
+		if (error) throw new Error(error.message);
+		return sortPatternsByNewest(
+			(data ?? []).map((row) => rowToPattern(row as FingerpickPatternRow)),
+		);
+	});
+}
+
+/** The ids of the tabs one signed-in player keeps; offline, this device's copy (#469). */
+export async function loadUserFingerpickFavourites(supabase: SupabaseClient, userId: string): Promise<string[]> {
+	return readThrough("fingerpickFavourites", userId, async () => {
+		const { data, error } = await supabase
+			.from("user_favourite_fingerpick_patterns")
+			.select("pattern_id")
+			.eq("user_id", userId);
+		if (error) throw new Error(error.message);
+		return (data ?? []).map((r) => r.pattern_id as string);
+	});
 }
 
 // ── Save (insert or update) ──────────────────────────────────────────────────

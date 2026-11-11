@@ -4,12 +4,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";
 import WebVitals from "@/components/WebVitals";
+import OfflineSupport from "@/components/OfflineSupport";
 import { GrainDefs } from "@/components/ui/grain";
 import { figtree, mono } from "./fonts/fonts";
+import { APP_DESCRIPTION } from "@/lib/brand/app";
 
 export const metadata: Metadata = {
   title: "Guitar Pal",
-  description: "Build your guitar practice, one routine at a time.",
+  description: APP_DESCRIPTION,
+  // Installed from Safari's Share menu, the app opens without the browser's bars (#468).
+  appleWebApp: { capable: true, title: "Guitar Pal", statusBarStyle: "default" },
 };
 
 // `cover` lets the page reach the screen's edges, so the safe-area insets the
@@ -48,6 +52,8 @@ export default function RootLayout({
           {children}
         </NavProgressProvider>
         <Toaster />
+        {/* After the Toaster, so its offline line has somewhere to show on a page opened offline. */}
+        <OfflineSupport />
         <NoFocusZoom />
         <WebVitals />
       </body>

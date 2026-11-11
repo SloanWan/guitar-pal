@@ -18,4 +18,12 @@ describe("proxy matcher", () => {
 		expect(runs("/_next/static/chunks/app.js")).toBe(false);
 		expect(runs("/icon.svg")).toBe(false);
 	});
+
+	it("skips the service worker and the static files it stores (#468)", () => {
+		expect(runs("/sw.js")).toBe(false);
+		expect(runs("/offline.html")).toBe(false);
+		expect(runs("/audio/webaudiofont/0250_LK_AcousticSteel_SF2_file.json")).toBe(false);
+		// Only those names: a page that merely starts the same way still gets a session.
+		expect(runs("/audiobooks")).toBe(true);
+	});
 });

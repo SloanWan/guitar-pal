@@ -1,6 +1,7 @@
 "use client";
 
 import { Library, Plus } from "lucide-react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Button } from "@/components/ui/button";
 import RhythmGrid, { type RhythmPosition } from "@/components/strum/stage/RhythmGrid";
 import type { Bar, Beat, StrumPattern } from "@/lib/strumPatterns";
@@ -41,6 +42,7 @@ export default function PendingChords({
 	onConfirm,
 	onCancel,
 }: Props) {
+	const gate = useWriteGate();
 	return (
 		<section className="st-pending" aria-label="New progression">
 			<div className="st-title">
@@ -78,7 +80,7 @@ export default function PendingChords({
 								<Library aria-hidden />
 								Patterns
 							</Button>
-							<Button variant="secondary" size="sm" onClick={onNewPattern}>
+							<Button variant="secondary" size="sm" onClick={onNewPattern} disabled={gate.blocked} title={gate.reason}>
 								<Plus aria-hidden />
 								New pattern
 							</Button>
@@ -90,7 +92,7 @@ export default function PendingChords({
 				<Button variant="ghost" size="sm" onClick={onCancel}>
 					Cancel
 				</Button>
-				<Button size="sm" disabled={pattern === null} onClick={onConfirm}>
+				<Button size="sm" disabled={pattern === null || gate.blocked} title={gate.reason} onClick={onConfirm}>
 					Add the progression
 				</Button>
 			</div>

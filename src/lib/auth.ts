@@ -1,6 +1,7 @@
-import type { UserIdentity } from "@supabase/supabase-js";
+import { isAuthRetryableFetchError, type UserIdentity } from "@supabase/supabase-js";
 import { createClient } from "./supabase";
 import { AVATAR_COLOR_KEY, AVATAR_ICON_KEY, NICKNAME_KEY } from "./profile";
+import { forgetRememberedUser, rememberedUser, rememberUser } from "./offline/rememberedUser";
 
 export async function signUp(email: string, password: string) {
 	const supabase = createClient();
@@ -20,12 +21,32 @@ export async function signOut() {
 	return { error };
 }
 
+/**
+ * The signed-in user, checked with Supabase. When Supabase cannot be reached
+ * (offline, #468) the session stored in this browser answers instead, so a
+ * player is not taken for a guest; past the access token's life there is no
+ * usable session, and the last user Supabase confirmed here answers (#469).
+ * Both are unchecked, which is fine for what the page shows, since every read
+ * and write is still checked by the database.
+ */
 export async function getUser() {
 	const supabase = createClient();
 	const {
 		data: { user },
+		error,
 	} = await supabase.auth.getUser();
-	return user;
+	if (user) {
+		rememberUser(user);
+		return user;
+	}
+	if (!isAuthRetryableFetchError(error)) {
+		forgetRememberedUser();
+		return null;
+	}
+	const {
+		data: { session },
+	} = await supabase.auth.getSession();
+	return session?.user ?? rememberedUser();
 }
 
 /**

@@ -1,0 +1,154 @@
+<!doctype html>
+<!--
+  Shown by the service worker (#468) for a page with no copy on this device and
+  no network. Self-contained on purpose: no build file is certain to be cached,
+  so the styles are inline, the fonts are the system's and the only image is the
+  precached app icon. Colours are the Candy tokens' values (src/app/tokens.css).
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<title>Offline · Guitar Pal</title>
+		<script>
+			(function () {
+				var t;
+				try {
+					t = localStorage.getItem("gp-theme");
+				} catch (e) {}
+				document.documentElement.dataset.theme = t === "dark" ? "dark" : "light";
+			})();
+		</script>
+		<style>
+			:root {
+				--page: #f7f7f8;
+				--card: #ffffff;
+				--line: #e2e3e6;
+				--ink: #17181b;
+				--ink-3: #5f636a;
+				--strum: #e3f1e5;
+				--strum-ink: #2c4e34;
+				--tab: #e0effa;
+				--tab-ink: #244962;
+				--chords: #ffe5e2;
+				--chords-ink: #572623;
+				--fb: #f7eae2;
+				--fb-ink: #3f2b1f;
+				color-scheme: light;
+			}
+			:root[data-theme="dark"] {
+				--page: #18191b;
+				--card: #25262a;
+				--line: #323338;
+				--ink: #f2f3f5;
+				--ink-3: #aaafb7;
+				--strum: #253127;
+				--strum-ink: #cbe2cf;
+				--tab: #223039;
+				--tab-ink: #c7def0;
+				--chords: #3f2624;
+				--chords-ink: #fccec9;
+				--fb: #362b24;
+				--fb-ink: #ead6ca;
+				color-scheme: dark;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+				min-height: 100vh;
+				display: grid;
+				place-items: center;
+				padding: 24px 16px;
+				background: var(--page);
+				color: var(--ink);
+				font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+			}
+			main {
+				width: 100%;
+				max-width: 420px;
+				background: var(--card);
+				border: 1px solid var(--line);
+				border-radius: 20px;
+				padding: 28px 24px 24px;
+			}
+			img {
+				display: block;
+				width: 56px;
+				height: 56px;
+				border-radius: 14px;
+			}
+			h1 {
+				margin: 16px 0 4px;
+				font-size: 24px;
+				line-height: 1.2;
+			}
+			p {
+				margin: 0;
+				color: var(--ink-3);
+			}
+			ul {
+				list-style: none;
+				margin: 20px 0;
+				padding: 0;
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 8px;
+			}
+			ul a {
+				display: block;
+				padding: 12px 14px;
+				border-radius: 12px;
+				font-weight: 600;
+				text-decoration: none;
+			}
+			.strum {
+				background: var(--strum);
+				color: var(--strum-ink);
+			}
+			.tab {
+				background: var(--tab);
+				color: var(--tab-ink);
+			}
+			.chords {
+				background: var(--chords);
+				color: var(--chords-ink);
+			}
+			.fb {
+				background: var(--fb);
+				color: var(--fb-ink);
+			}
+			button {
+				width: 100%;
+				padding: 12px;
+				border: 0;
+				border-radius: 12px;
+				background: var(--ink);
+				color: var(--page);
+				font: inherit;
+				font-weight: 600;
+				box-shadow: 0 3px 0 var(--ink-3);
+				cursor: pointer;
+			}
+			button:active {
+				transform: translateY(3px);
+				box-shadow: none;
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<img src="/icon-192.png" alt="" />
+			<h1>You're offline</h1>
+			<p>This page isn't saved on this device yet. Once Guitar Pal has been open here online, these work without a connection:</p>
+			<ul>
+				<li><a class="strum" href="/strum">Strum</a></li>
+				<li><a class="tab" href="/tab">Tab</a></li>
+				<li><a class="chords" href="/chords">Chords</a></li>
+				<li><a class="fb" href="/fretboard">Fretboard</a></li>
+			</ul>
+			<button type="button" onclick="location.reload()">Try again</button>
+		</main>
+	</body>
+</html>

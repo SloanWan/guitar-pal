@@ -42,6 +42,8 @@ function writeCounted(keys: Set<string>): void {
 /** Count one visit to a thing. No-op signed out, and for what this tab has counted already. */
 export async function recordVisit(supabase: SupabaseClient, user: User | null, kind: VisitKind, target: string): Promise<void> {
 	if (!user || target === "") return;
+	// Offline the count could only fail; it is not worth keeping to send later (#469).
+	if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 	const key = `${user.id}:${kind}:${target}`;
 	const counted = readCounted();
 	if (counted.has(key)) return;

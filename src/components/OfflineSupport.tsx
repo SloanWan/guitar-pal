@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase";
-import { accountChanged, CACHED_ACCOUNT_KEY, forgetKeptPages, serviceWorkerUrl } from "@/lib/pwa/offline";
+import { accountChanged, accountToRecord, CACHED_ACCOUNT_KEY, forgetKeptPages, serviceWorkerUrl } from "@/lib/pwa/offline";
 
 const OFFLINE_TOAST = "offline";
 
@@ -42,16 +42,17 @@ export default function OfflineSupport() {
 		if (!("caches" in window)) return;
 		const {
 			data: { subscription },
-		} = createClient().auth.onAuthStateChange((_event, session) => {
+		} = createClient().auth.onAuthStateChange((event, session) => {
 			const current = session?.user.id ?? null;
 			let recorded: string | null = null;
 			try {
 				recorded = localStorage.getItem(CACHED_ACCOUNT_KEY);
-				localStorage.setItem(CACHED_ACCOUNT_KEY, current ?? "");
+				const next = accountToRecord(recorded, event, current);
+				if (next !== null) localStorage.setItem(CACHED_ACCOUNT_KEY, next);
 			} catch {
-				// No storage: nothing recorded, so the pages are forgotten every time — the safe side.
+				// No storage: nothing recorded, so the pages are forgotten on every account seen — the safe side.
 			}
-			if (accountChanged(recorded, current)) forgetKeptPages(caches).catch(() => undefined);
+			if (accountChanged(recorded, event, current)) forgetKeptPages(caches).catch(() => undefined);
 		});
 		return () => subscription.unsubscribe();
 	}, []);

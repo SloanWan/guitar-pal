@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeEmptySlot, moveCell, setFret, type Cell } from "@/lib/fingerpickEdit";
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
+	readFretEntry,
 	BLOCK_REASON,
 	TWO_DIGIT_WINDOW_MS,
 	applyNoteEdit,
@@ -299,5 +300,30 @@ describe("an edit over a block's notes (#437)", () => {
 		const off = applyBlockEdit(x.pattern, { anchor: at(0, 0, 4), head: at(0, 1, 5) }, at(0, 0, 4), { kind: "mute" });
 		if (!("pattern" in off)) throw new Error(off.blocked);
 		expect(note(off.pattern, at(0, 1, 5)).muted).toBe(false);
+	});
+});
+
+describe("readFretEntry (#479)", () => {
+	it("takes a 0 or a 3–9 as a whole fret", () => {
+		expect(readFretEntry("0")).toEqual({ text: "0", fret: 0, done: true });
+		expect(readFretEntry("7")).toEqual({ text: "7", fret: 7, done: true });
+	});
+
+	it("lets a 1 or a 2 wait for a second digit", () => {
+		expect(readFretEntry("1")).toEqual({ text: "1", fret: 1, done: false });
+		expect(readFretEntry("2")).toEqual({ text: "2", fret: 2, done: false });
+		expect(readFretEntry("12")).toEqual({ text: "12", fret: 12, done: true });
+		expect(readFretEntry("24")).toEqual({ text: "24", fret: 24, done: true });
+	});
+
+	it("drops a second digit that would pass the neck", () => {
+		expect(readFretEntry("25")).toEqual({ text: "2", fret: 2, done: false });
+	});
+
+	it("ignores anything but digits, and keeps at most two", () => {
+		expect(readFretEntry("")).toEqual({ text: "", fret: null, done: false });
+		expect(readFretEntry("x")).toEqual({ text: "", fret: null, done: false });
+		expect(readFretEntry(" 1a5")).toEqual({ text: "15", fret: 15, done: true });
+		expect(readFretEntry("123")).toEqual({ text: "12", fret: 12, done: true });
 	});
 });

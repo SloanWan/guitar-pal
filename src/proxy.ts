@@ -86,7 +86,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
 	matcher: [
 		// A report (#447) and the shared chord shapes (#463) need no session: skipping them here spares
-		// each a round trip to Supabase, which the shapes' route exists to avoid.
-		"/((?!_next/static|_next/image|favicon.ico|icon.svg|api/telemetry|api/chords/voicings|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+		// each a round trip to Supabase, which the shapes' route exists to avoid. So do the service
+		// worker, its offline page and the sound presets it stores (#468), which are static files.
+		"/((?!_next/static|_next/image|favicon.ico|icon.svg|sw\\.js|offline\\.html|audio/|api/telemetry|api/chords/voicings|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
 	],
 };

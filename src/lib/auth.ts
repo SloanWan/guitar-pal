@@ -1,4 +1,4 @@
-import type { UserIdentity } from "@supabase/supabase-js";
+import { isAuthRetryableFetchError, type UserIdentity } from "@supabase/supabase-js";
 import { createClient } from "./supabase";
 import { AVATAR_COLOR_KEY, AVATAR_ICON_KEY, NICKNAME_KEY } from "./profile";
 
@@ -20,12 +20,23 @@ export async function signOut() {
 	return { error };
 }
 
+/**
+ * The signed-in user, checked with Supabase. When Supabase cannot be reached
+ * (offline, #468) the session stored in this browser answers instead, so a
+ * player is not taken for a guest; it is unchecked, which is fine for what the
+ * page shows, since every read and write is still checked by the database.
+ */
 export async function getUser() {
 	const supabase = createClient();
 	const {
 		data: { user },
+		error,
 	} = await supabase.auth.getUser();
-	return user;
+	if (user || !isAuthRetryableFetchError(error)) return user;
+	const {
+		data: { session },
+	} = await supabase.auth.getSession();
+	return session?.user ?? null;
 }
 
 /**

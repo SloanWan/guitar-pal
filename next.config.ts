@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
+/** Which build a report came from (#447): Vercel names its commit, the Docker deploy passes BUILD_SHA. Empty when built by hand. */
+const buildSha = (process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.BUILD_SHA ?? "").slice(0, 12);
+
 const nextConfig: NextConfig = {
 	// Self-hosted in Docker: emit .next/standalone with a traced node_modules
 	// subset so the runtime image needs no `npm ci` (see Dockerfile).
@@ -11,10 +14,25 @@ const nextConfig: NextConfig = {
 	// so every deploy died with ENOENT (vercel/next.js#96646, fixed in 16.3.5).
 	// Dropping standalone under Vercel keeps that combination off the table.
 	output: process.env.VERCEL ? undefined : "standalone",
-	// Which build a report came from (#447): Vercel names its commit, the Docker
-	// deploy passes BUILD_SHA. Empty when built by hand.
 	env: {
-		NEXT_PUBLIC_BUILD_SHA: (process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.BUILD_SHA ?? "").slice(0, 12),
+		NEXT_PUBLIC_BUILD_SHA: buildSha,
+		// The service worker's version (#468): a new one makes browsers install the
+		// new worker and drop the old caches, so a build by hand, with no commit
+		// named, still gets one of its own.
+		NEXT_PUBLIC_SW_VERSION: buildSha || Date.now().toString(36),
+	},
+	// The worker must always be fetched fresh, or a browser keeps running the old
+	// one past a deploy.
+	async headers() {
+		return [
+			{
+				source: "/sw.js",
+				headers: [
+					{ key: "Content-Type", value: "application/javascript; charset=utf-8" },
+					{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+				],
+			},
+		];
 	},
 	// The document pages read their Markdown from docs/ at request time; the
 	// trace has to carry the file into the standalone output.

@@ -3,6 +3,7 @@ import { makeEmptySlot, moveCell, setFret, type Cell } from "@/lib/fingerpickEdi
 import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	readFretEntry,
+	pressFretPad,
 	BLOCK_REASON,
 	TWO_DIGIT_WINDOW_MS,
 	applyNoteEdit,
@@ -325,5 +326,30 @@ describe("readFretEntry (#479)", () => {
 		expect(readFretEntry("x")).toEqual({ text: "", fret: null, done: false });
 		expect(readFretEntry(" 1a5")).toEqual({ text: "15", fret: 15, done: true });
 		expect(readFretEntry("123")).toEqual({ text: "12", fret: 12, done: true });
+	});
+});
+
+describe("pressFretPad (#487)", () => {
+	it("writes a whole fret at once and moves on", () => {
+		expect(pressFretPad("", 7, null)).toEqual({ text: "", write: { fret: 7, advance: true } });
+		expect(pressFretPad("", 0, null)).toEqual({ text: "", write: { fret: 0, advance: true } });
+		expect(pressFretPad("1", 2, null)).toEqual({ text: "", write: { fret: 12, advance: true } });
+	});
+
+	it("holds a 1 or a 2 for a second digit, and drops one past the neck", () => {
+		expect(pressFretPad("", 1, null)).toEqual({ text: "1" });
+		expect(pressFretPad("", 2, null)).toEqual({ text: "2" });
+		expect(pressFretPad("2", 5, null)).toEqual({ text: "2" });
+	});
+
+	it("Done writes what was typed, else the offered fret, else closes", () => {
+		expect(pressFretPad("1", "done", 3)).toEqual({ text: "", write: { fret: 1, advance: true } });
+		expect(pressFretPad("", "done", 3)).toEqual({ text: "", write: { fret: 3, advance: true } });
+		expect(pressFretPad("", "done", null)).toEqual({ text: "", close: true });
+	});
+
+	it("Backspace takes back a digit, and with none clears the note", () => {
+		expect(pressFretPad("1", "back", null)).toEqual({ text: "" });
+		expect(pressFretPad("", "back", null)).toEqual({ text: "", clear: true });
 	});
 });

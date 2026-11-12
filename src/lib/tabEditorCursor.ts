@@ -327,6 +327,36 @@ export function readFretEntry(raw: string): FretEntry {
 	return { text, fret, done: text.length === 2 || fret === 0 || fret * 10 > MAX_FRET };
 }
 
+/** A key of the tablet's fret keypad (#487). */
+export type FretPadKey = number | "back" | "done";
+
+export interface FretPadResult {
+	/** What the keypad shows typed after the key. */
+	text: string;
+	/** A fret to write at the cursor; a fret typed whole, or Done, moves on as auto-advance does. */
+	write?: { fret: number; advance: boolean };
+	/** Backspace with nothing typed clears the note at the cursor. */
+	clear?: boolean;
+	/** Done with nothing to write closes the keypad. */
+	close?: boolean;
+}
+
+/**
+ * One press on the tablet's keypad (#487), by `readFretEntry`'s rule: a 0 or a 3–9
+ * is written at once, a 1 or a 2 waits for a second digit or Done. Done writes what
+ * was typed or, with nothing typed, the chord shape's fret (`offered`).
+ */
+export function pressFretPad(text: string, key: FretPadKey, offered: number | null): FretPadResult {
+	if (key === "back") return text === "" ? { text, clear: true } : { text: text.slice(0, -1) };
+	if (key === "done") {
+		const fret = readFretEntry(text).fret ?? offered;
+		return fret === null ? { text: "", close: true } : { text: "", write: { fret, advance: true } };
+	}
+	const entry = readFretEntry(text + String(key));
+	if (entry.done && entry.fret !== null) return { text: "", write: { fret: entry.fret, advance: true } };
+	return { text: entry.text };
+}
+
 // ── Keys ─────────────────────────────────────────────────────────────────────
 
 export type EditorKeyAction =

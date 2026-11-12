@@ -1,5 +1,5 @@
 /* /docs/mcp (#486): the URL card, the client picker over the chosen client's card, the
-   requests to try. Scoped under .mcp-page; the prose sizes are the grammar
+   models, the requests to try. Scoped under .mcp-page; the prose sizes are the grammar
    page's (doc.css), so the two docs read alike. Monospace only for what is
    copied or typed. */
 
@@ -205,7 +205,7 @@
 	color: var(--gp-ink-3);
 }
 
-/* ---- what to ask, what comes back --------------------------------------------------- */
+/* ---- which model, what to ask, what comes back ------------------------------------ */
 
 .mcp-asks {
 	display: flex;
@@ -236,16 +236,16 @@
 	color: var(--gp-ink);
 }
 
-.mcp-back {
+.mcp-list {
 	padding-left: 1.25rem;
 	list-style: disc;
 }
 
-.mcp-back > li {
+.mcp-list > li {
 	margin: 0.35rem 0;
 }
 
-.mcp-back > li::marker {
+.mcp-list > li::marker {
 	color: var(--gp-ink-3);
 }
 

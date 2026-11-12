@@ -13,8 +13,8 @@ import { CONNECT_CLIENTS, MCP_URL, connectSnippets, type ConnectClient } from "@
 
 /**
  * `/docs/mcp`: how to add the MCP server to an AI app, quickly. The URL
- * first, then one client's steps at a time, then what to ask and what comes
- * back. The full reference stays `docs/mcp.md`, linked at the foot.
+ * first, then one client's steps at a time, then which model to use, what to
+ * ask and what comes back. The full reference stays `docs/mcp.md`, linked at the foot.
  */
 
 const SNIPPETS = connectSnippets();
@@ -118,6 +118,15 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 				</div>
 			</section>
 
+			<section aria-labelledby="mcp-models">
+				<h2 id="mcp-models">{copy.modelsHeading}</h2>
+				<ul className="mcp-list">
+					{copy.models.map((line) => (
+						<li key={line}>{line}</li>
+					))}
+				</ul>
+			</section>
+
 			<section aria-labelledby="mcp-ask">
 				<h2 id="mcp-ask">{copy.askHeading}</h2>
 				<p>{copy.askLead}</p>
@@ -136,7 +145,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 
 			<section aria-labelledby="mcp-back">
 				<h2 id="mcp-back">{copy.backHeading}</h2>
-				<ul className="mcp-back">
+				<ul className="mcp-list">
 					{copy.back.map((line) => (
 						<li key={line}>
 							<Inline text={line} />

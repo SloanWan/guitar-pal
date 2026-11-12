@@ -32,7 +32,7 @@ And the name? I once had a job where we did stock checks on an app called myPal.
 - **Books** — drop in a method book PDF (scans too) and get its exercises back as drafts you can play, right beside the page. Not open yet, but the sample book on the shelf is there to poke at.
 - **Assistant** — type `C G Am F, slow folk strum` or paste an ASCII tab, and get a card you can play. Plain rules underneath ([grammar](docs/assistant-grammar.md)); General mode brings in a model.
 - **Share links** — send a pattern to a friend; they can play it without signing up.
-- **MCP server** — plug `/api/mcp` into Claude, Cursor or any MCP client, and whatever the model writes comes back as a link that plays ([setup](docs/mcp.md)).
+- **MCP server** — plug `/api/mcp` into Claude, ChatGPT, Cursor or VS Code, and whatever the model writes comes back as a link that plays ([setup](docs/mcp.md)).
 
 No account? No problem, everything works signed out. Your stuff just lives in this browser and doesn't sync, so if you'd rather not sign up, think twice before clearing your browser data :)
 
@@ -44,7 +44,7 @@ The MCP server lives here, no account or key needed:
 https://guitarpal.sloanwan.com/api/mcp
 ```
 
-On claude.ai or Claude Desktop: Settings → Connectors → Add custom connector, paste the URL. From the terminal, Claude Code is one line:
+On claude.ai or the Claude app (any plan; Free allows one custom connector): Customize → Connectors → + Add → Add custom connector, paste the URL, choose No sign-in. On ChatGPT (Plus or above): chatgpt.com/plugins → + → Add custom MCP server, paste the URL, choose No authentication. From the terminal, Claude Code is one line:
 
 ```sh
 claude mcp add --transport http guitar-pal https://guitarpal.sloanwan.com/api/mcp
@@ -62,7 +62,7 @@ VS Code (`.vscode/mcp.json`):
 { "servers": { "guitar-pal": { "type": "http", "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
 ```
 
-Then send it a photo of a tab and say "bring this into Guitar Pal". Other clients, the tools and the limits are in [docs/mcp.md](docs/mcp.md).
+Then send it a photo of a tab and say "bring this into Guitar Pal". Which model to use, more requests to try and the limits are in [docs/mcp.md](docs/mcp.md), or on [the site](https://guitarpal.sloanwan.com/docs/mcp).
 
 ## Standing on the shoulders of
 

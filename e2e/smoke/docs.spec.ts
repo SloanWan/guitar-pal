@@ -11,6 +11,9 @@ test("the MCP page shows the URL and one client's setup at a time", { tag: "@pho
 	await expect(clients.getByRole("radio", { name: "Claude", exact: true })).toBeChecked();
 	await expect(page.getByRole("button", { name: "Copy the command" })).toHaveCount(0);
 
+	await clients.getByRole("radio", { name: "ChatGPT" }).click();
+	await expect(page.getByText("chatgpt.com/plugins", { exact: true })).toBeVisible();
+
 	await clients.getByRole("radio", { name: "Claude Code" }).click();
 	await expect(page.getByRole("button", { name: "Copy the command" })).toBeVisible();
 	await expect(page.getByText("claude mcp add --transport http guitar-pal", { exact: false })).toBeVisible();

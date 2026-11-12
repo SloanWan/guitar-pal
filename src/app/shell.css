@@ -10,6 +10,13 @@
    (viewport-fit=cover) and the system's bar lies over it — blurred on an iPad (#478).
    The header grows by that inset and pads its content below it; in a browser tab the
    inset is 0. --gp-safe-top is the one name for it, so a test can set it.
+
+   Padding is not enough on an iPad: iPadOS 26 draws its scroll edge effect, a blur, under
+   the status bar whatever lies there, unless a fixed element of one colour covers the top
+   edge — WebKit hit-tests 4px below the middle of the edge and wants it at least 90% of
+   the width and taller than 10px, then fills the system's area with its colour. The edge
+   band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
+   inset only, so it is 0 tall wherever the inset is.
    ===================================================================================== */
 :root {
 	--gp-safe-top: env(safe-area-inset-top, 0px);
@@ -29,11 +36,21 @@
 body {
 	padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 }
+/* Over menus and dialogs too, so they never take the point WebKit samples. */
+.gp-edge-band {
+	position: fixed;
+	inset: 0 0 auto;
+	z-index: 2147483647;
+	height: var(--gp-safe-top);
+	background: var(--gp-page);
+}
 
 @layer components {
 	.gp-header {
 		position: relative;
 		z-index: 20;
+		/* Its own layer in a section transition, so it stays put (below). */
+		view-transition-name: gp-header;
 		flex: none;
 		height: var(--gp-header-h);
 		padding-top: var(--gp-safe-top);
@@ -446,5 +463,43 @@ body {
 @media (prefers-reduced-motion: reduce) {
 	.gp-launch-mark [data-pick] {
 		animation: none;
+	}
+}
+
+/* A move to another section (#489, ModuleMain): the old page leaves 6px up and fades
+   (spec: screen leave), the new one fades in as its sections rise (gp-rise). The header is
+   shown live, not cross-faded, so the nav's pick keeps sliding; everything else outside
+   <main> (the tab bar, the page colour) changes at once. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(gp-header),
+::view-transition-new(gp-header) {
+	animation: none;
+}
+::view-transition-old(gp-header) {
+	display: none;
+}
+::view-transition-old(.section) {
+	animation: gp-section-leave var(--gp-d-out) var(--gp-ease-out) both;
+}
+::view-transition-new(.section) {
+	animation: gp-section-enter var(--gp-d-in) var(--gp-ease-in) 60ms both;
+}
+@keyframes gp-section-leave {
+	to {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+}
+@keyframes gp-section-enter {
+	from {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
 	}
 }

@@ -96,6 +96,9 @@ pitches. The server is Streamable HTTP, stateless, JSON responses, no auth.
 Calls and new links are rate-limited per IP; over a limit the tool returns a
 message instead of a link.
 
+Directory listings: the copy, icons, test cases and per-platform files are in
+[`docs/listing/`](listing/README.md).
+
 Running your own: beyond the app's env, set `SUPABASE_SERVICE_ROLE_KEY` and
 `MCP_SHARE_OWNER_ID` (the account shares are written as), optionally
 `MCP_DAILY_SHARES` (default 200) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps

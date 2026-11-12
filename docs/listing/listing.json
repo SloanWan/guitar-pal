@@ -1,0 +1,40 @@
+{
+	"$comment": "The listing copy for the MCP directories (#492), one source for docs/listing/README.md and scripts/build-openai-plugin.mjs. Limits: OpenAI displayName and shortDescription ≤30, longDescription ≤4000 (root description ≤1024), defaultPrompt ≤3 × 128; Claude tagline ≤200, description ≤2000; MCP Registry description ≤100.",
+	"slug": "guitar-pal",
+	"name": "Guitar Pal",
+	"version": "1.0.0",
+	"url": "https://guitarpal.sloanwan.com/api/mcp",
+	"website": "https://guitarpal.sloanwan.com",
+	"docs": "https://guitarpal.sloanwan.com/docs/mcp",
+	"privacy": "https://guitarpal.sloanwan.com/privacy",
+	"terms": "https://guitarpal.sloanwan.com/terms",
+	"support": "https://guitarpal.sloanwan.com/support",
+	"repository": "https://github.com/SloanWan/guitar-pal",
+	"developer": { "name": "Sloan Wan", "email": "nysuswan@gmail.com" },
+	"brandColor": "#A5504B",
+	"brandColorDark": "#EBD14D",
+	"en": {
+		"tagline": "Play guitar tabs and strums",
+		"taglineLong": "Write a strumming pattern or a fingerpicking tab, or read one off a photo, and get a link that plays it on real guitar samples.",
+		"registryDescription": "Strumming patterns and fingerpicking tabs, written or read off a photo, as links that play.",
+		"description": "Guitar Pal turns guitar music into a link you can hear.\n\nAsk for a strumming pattern over your chords, a fingerpicking exercise, a short riff, or show a photo or screenshot of a tab, and Guitar Pal checks what was written and gives back a link. The link opens a full player in the browser: play it on real guitar samples, loop a section, slow it down, and import it into your own library to edit. No account is needed to connect or to open a link.\n\nWhat it does:\n- Strumming patterns: a rhythm in down, up and muted strokes, with a chord per bar, a tempo and a capo.\n- Fingerpicking tabs: notes on an exact rhythmic grid, with hammer-ons, pull-offs, slides, bends, vibrato, palm mutes and more.\n- Tabs from images: a tab read off a photo, scan or screenshot keeps its written note values, and the places that were hard to read are listed on the page to check against the original.\n- Reading a link back, to change it and make a new one.\n\nEvery result passes the same validators the Guitar Pal app uses, so a link always plays. Playback is the app's own sample engine replaying what was written; Guitar Pal does not generate audio. Each link is a public snapshot that expires after 30 days.",
+		"categories": { "openai": "Education & Research", "claude": ["Education", "Music"] },
+		"prompts": [
+			"Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm.",
+			"Use Guitar Pal to write a slow 6/8 fingerpicking pattern over Am–F–C–G.",
+			"Bring this tab into Guitar Pal so I can play it back."
+		],
+		"releaseNotes": "First release: propose_strum, propose_tab, import_tab and read_share. Links play in the Guitar Pal player and expire after 30 days."
+	},
+	"zh": {
+		"tagline": "能直接播放的吉他谱",
+		"taglineLong": "写一个扫弦节奏或一段指弹谱，或者从照片里读一张六线谱，得到一个用真实吉他采样播放的链接。",
+		"description": "Guitar Pal 把吉他谱变成一个能听的链接。\n\n让它写一个配你和弦的扫弦节奏、一段指弹练习、一小段 riff，或者发一张六线谱的照片或截图给它，Guitar Pal 会先检查写出来的内容，再给你一个链接。链接打开就是浏览器里的完整播放器：用真实吉他采样播放，循环某一段，放慢速度，还能导入自己的曲库编辑。连接和打开链接都不需要账号。\n\n能做什么：\n- 扫弦节奏：下扫、上扫、闷音组成的节奏，每小节一个和弦，可设速度和变调夹。\n- 指弹谱：音符落在精确的节奏网格上，支持击弦、勾弦、滑音、推弦、揉弦、手掌闷音等技巧。\n- 从图片读谱：从照片、扫描件或截图读出的谱子保留原来写的时值，读不准的地方会列在页面上，方便对照原谱检查。\n- 读回一个链接，修改后生成新链接。\n\n每个结果都经过 Guitar Pal 应用自己的校验，所以链接一定能播放。声音是应用的采样引擎在回放写好的谱，Guitar Pal 不生成音频。每个链接都是一份公开快照，30 天后失效。",
+		"prompts": [
+			"用 Guitar Pal 给我一个 C G Am F 的扫弦节奏，90 拍。",
+			"用 Guitar Pal 写一段 Am F C G 的慢速 6/8 指弹。",
+			"把这张谱导入 Guitar Pal，我想听听。"
+		],
+		"releaseNotes": "首个版本：propose_strum、propose_tab、import_tab、read_share 四个工具。链接在 Guitar Pal 播放器里播放，30 天后失效。"
+	}
+}

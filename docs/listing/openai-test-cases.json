@@ -1,0 +1,51 @@
+{
+	"positive": [
+		{
+			"description": "A strumming pattern over a chord progression, named directly.",
+			"prompt": "Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm.",
+			"tools_triggered": "propose_strum",
+			"expected_behavior": "Calls propose_strum once with a one-bar 4/4 rhythm such as \"D DU UD \", chords C, G, Am, F and bpm 90. Replies with the returned guitarpal.sloanwan.com/p/<id> link, which opens a player with four bars, one chord each, at 90 bpm."
+		},
+		{
+			"description": "A fingerpicking exercise described by what the player wants to hear, without naming the plugin.",
+			"prompt": "Write me an easy Travis-picking exercise in C and let me listen to how it should sound.",
+			"tools_triggered": "propose_tab",
+			"expected_behavior": "Calls propose_tab with a few bars in 4/4 on an 8-slot grid: an alternating thumb on strings 4–6 and melody notes on strings 1–3 over C-family chords. Replies with the /p/<id> link; the page plays the exercise and shows it as tab."
+		},
+		{
+			"description": "A tab image brought into the player. The attached image is an original exercise rendered by Guitar Pal.",
+			"prompt": "Bring this tab into Guitar Pal so I can play it back.",
+			"tools_triggered": "import_tab",
+			"expected_behavior": "Reads the attached tab and calls import_tab with its bars, copying every fret and the printed note values. Replies with the /p/<id> link; any places it was unsure of are listed under the title on the page.",
+			"file_attachment_urls": [
+				"https://guitarpal.sloanwan.com/listing/sample-tab.png"
+			]
+		},
+		{
+			"description": "A riff with techniques, composed and made playable.",
+			"prompt": "Compose a short blues lick in A with a couple of hammer-ons that I can loop slowly while I practise.",
+			"tools_triggered": "propose_tab",
+			"expected_behavior": "Calls propose_tab with a short lick in A whose notes carry hammer links. Replies with the /p/<id> link; the player loops the lick and the hammer-ons are drawn and played."
+		},
+		{
+			"description": "A request in Chinese for a strumming pattern with a capo.",
+			"prompt": "用 Guitar Pal 给我一个 G Em C D 的民谣扫弦，变调夹夹 2 品，100 拍。",
+			"tools_triggered": "propose_strum",
+			"expected_behavior": "Calls propose_strum with a 4/4 folk rhythm, chords G, Em, C, D, bpm 100 and capo 2. Replies (in Chinese) with the /p/<id> link; the player shows capo 2 and four bars at 100 bpm."
+		}
+	],
+	"negative": [
+		{
+			"description": "Music theory question: the plugin should not act. Expected: answered in words, no tool call and no link.",
+			"prompt": "Why does a capo change the key but not the chord shapes?"
+		},
+		{
+			"description": "Technique advice: nothing to play, so the plugin should not act. Expected: practical advice in words, no tool call.",
+			"prompt": "How do I stop my F barre chord from buzzing?"
+		},
+		{
+			"description": "Gear recommendation outside the plugin's scope. Expected: a normal answer, no tool call.",
+			"prompt": "What's a good acoustic guitar for a beginner under $300?"
+		}
+	]
+}

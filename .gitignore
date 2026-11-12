@@ -51,3 +51,6 @@ next-env.d.ts
 
 # scratch / temp reports (not committed)
 .tmp/
+
+# The OpenAI plugin ZIP (scripts/build-openai-plugin.mjs)
+dist/

@@ -32,3 +32,18 @@ test("the MCP page reads in Chinese", async ({ page }) => {
 	await expect(page.getByRole("heading", { name: "把 Guitar Pal 接入你的 AI", level: 1 })).toBeVisible();
 	await expect(page.getByRole("radiogroup", { name: "你的应用" })).toBeVisible();
 });
+
+/** The pages the MCP directories link to (#492), reached from the landing footer. */
+test("the landing footer reaches privacy, terms and support, in both languages", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/");
+	const legal = page.getByRole("navigation", { name: "Legal" });
+	await legal.getByRole("link", { name: "Privacy" }).click();
+	await expect(page.getByRole("heading", { name: "Privacy policy", level: 1 })).toBeVisible();
+
+	await page.goto("/terms?lang=zh");
+	await expect(page.getByRole("heading", { name: "使用条款", level: 1 })).toBeVisible();
+
+	await page.goto("/support?lang=en");
+	await expect(page.getByRole("heading", { name: "Support", level: 1 })).toBeVisible();
+	await expect(page.getByRole("link", { name: "nysuswan@gmail.com" }).first()).toHaveAttribute("href", "mailto:nysuswan@gmail.com");
+});

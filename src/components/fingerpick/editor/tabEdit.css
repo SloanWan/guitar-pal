@@ -468,6 +468,78 @@
 	.te-touch-fret::placeholder {
 		color: var(--gp-ink-3);
 	}
+	/* A tablet's keypad (#487): beside the cursor's cell, over the grid; 44px keys. */
+	.te-pad {
+		position: absolute;
+		z-index: 4;
+		width: 316px;
+		padding: 8px 10px 10px;
+		border-radius: var(--gp-r-l);
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop), var(--gp-ring-c);
+		font-family: var(--gp-f-body);
+		user-select: none;
+		-webkit-user-select: none;
+		scroll-margin: 10px;
+		visibility: hidden;
+	}
+	.te-pad[data-placed] {
+		visibility: visible;
+		animation: te-pad-in var(--gp-d-rise) var(--gp-ease-in) both;
+	}
+	@keyframes te-pad-in {
+		from {
+			opacity: 0;
+			transform: translateY(-4px) scale(0.97);
+		}
+	}
+	.te-pad-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 8px;
+		height: 28px;
+		padding: 0 4px 4px;
+	}
+	.te-pad-where {
+		overflow: hidden;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	.te-pad-value {
+		min-width: 2ch;
+		color: var(--gp-ink);
+		font: 700 20px/1 var(--gp-f-num);
+		font-variant-numeric: tabular-nums;
+		text-align: right;
+	}
+	.te-pad-value[data-empty] {
+		color: var(--gp-ink-3);
+	}
+	.te-pad-keys {
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: 6px;
+	}
+	.te-pad .te-pad-key {
+		width: 100%;
+		height: 44px;
+		padding: 0;
+		font: 600 18px/1 var(--gp-f-num);
+		font-variant-numeric: tabular-nums;
+	}
+	.te-pad-offer {
+		margin-left: 3px;
+		font-size: 12px;
+		opacity: 0.85;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.te-pad[data-placed] {
+			animation: none;
+		}
+	}
 	.te-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(304px, 1fr));

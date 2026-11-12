@@ -202,3 +202,19 @@ export function createLogoPlayer({ apply, now, raf, cancel, reducedMotion }: Log
 	};
 	return { play, stop, isRunning: () => id !== 0 };
 }
+
+/** The light logo slots (`--gp-lgl0…4` in tokens.css), for a mark drawn off the page. */
+export const LIGHT_SLOTS: readonly string[] = ["#4C7A56", "#624634", "#427394", "#A5504B", "#EBD14D"];
+
+/**
+ * The resting mark as standalone SVG markup, `size` px square, each pick's gap in the
+ * ground colour — what PickMark draws, for an image made off the page (the launch images, #490).
+ */
+export function markSvg(size: number, slots: readonly string[], ground: string): string {
+	const paths = MARK_PICKS.map((p, j) => {
+		const gap = gapOffset(j);
+		const under = gap ? `<path d="${PICK_PATH}" transform="translate(${gap[0]} ${gap[1]}) ${pickTransform(p)}" fill="${ground}"/>` : "";
+		return `${under}<path d="${PICK_PATH}" transform="${pickTransform(p)}" fill="${slots[j]}"/>`;
+	}).join("");
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${markViewBox()}" overflow="visible">${paths}</svg>`;
+}

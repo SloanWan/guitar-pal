@@ -85,3 +85,62 @@ test("the header grows by the top safe area and keeps its content below it", { t
 	const main = await page.locator("main").first().boundingBox();
 	expect(main?.y ?? 0).toBeGreaterThanOrEqual((after?.y ?? 0) + (after?.height ?? 0) - 1);
 });
+
+/**
+ * Padding alone leaves iPadOS's scroll edge blur over the header: WebKit skips it only when
+ * a fixed element of one colour is hit 4px below the middle of the top edge, at least 90%
+ * of the width and taller than 10px (#478). The edge band is that element, over the inset.
+ */
+test("a fixed band in the header's colour covers the top inset", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/strum");
+	const band = page.locator(".gp-edge-band");
+	expect((await band.boundingBox())?.height ?? 0).toBe(0);
+	await page.addStyleTag({ content: ":root { --gp-safe-top: 24px; }" });
+
+	const box = await band.boundingBox();
+	const width = page.viewportSize()?.width ?? 0;
+	expect(box).toEqual({ x: 0, y: 0, width, height: 24 });
+	const sampled = await page.evaluate(() => {
+		const hit = document.elementFromPoint(innerWidth / 2, 4);
+		const header = document.querySelector("header.gp-header");
+		return {
+			hit: hit?.className,
+			position: hit ? getComputedStyle(hit).position : "",
+			colour: hit ? getComputedStyle(hit).backgroundColor : "",
+			header: header ? getComputedStyle(header).backgroundColor : "",
+		};
+	});
+	expect(sampled.hit).toBe("gp-edge-band");
+	expect(sampled.position).toBe("fixed");
+	expect(sampled.colour).toBe(sampled.header);
+});
+
+/**
+ * A header link moves to its section through a view transition typed `section` (#489);
+ * the browser's back button does not animate.
+ */
+test("a header link animates the move to its section; back does not", async ({ page }) => {
+	await page.goto("/strum");
+	await page.evaluate(() => {
+		const w = window as unknown as { __vt: string[][] };
+		w.__vt = [];
+		const start = document.startViewTransition?.bind(document);
+		if (!start) return;
+		document.startViewTransition = ((arg: StartViewTransitionOptions) => {
+			w.__vt.push(arg && "types" in arg && arg.types ? [...arg.types] : []);
+			return start(arg);
+		}) as typeof document.startViewTransition;
+	});
+	const supported = await page.evaluate(() => "startViewTransition" in document);
+	test.skip(!supported, "no view transitions in this browser");
+
+	const nav = page.getByRole("navigation", { name: "Main" });
+	await nav.getByRole("link", { name: "Chords" }).click();
+	await expect(page).toHaveURL(/\/chords$/);
+	await expect(nav.getByRole("link", { name: "Chords" })).toHaveAttribute("aria-current", "page");
+	expect(await page.evaluate(() => (window as unknown as { __vt: string[][] }).__vt)).toEqual([["section"]]);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/strum$/);
+	expect(await page.evaluate(() => (window as unknown as { __vt: string[][] }).__vt)).toEqual([["section"]]);
+});

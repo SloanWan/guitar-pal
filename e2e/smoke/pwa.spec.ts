@@ -75,4 +75,44 @@ test.describe("offline", () => {
 		}
 		await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 	});
+
+	test("Try again shows it is trying, then that it is still offline (#488)", async ({ page, context }) => {
+		await page.goto("/strum");
+		await controlled(page);
+		await context.setOffline(true);
+		await page.goto("/settings");
+		const again = page.locator("button.again");
+		await again.click();
+		await expect(again).toHaveAttribute("aria-busy", "true");
+		await expect(again).toHaveText("Connecting…");
+		await expect(again.locator(".spin")).toBeVisible();
+		await expect(again).toHaveText("Still offline");
+		await expect(again).toHaveAttribute("aria-busy", "false");
+		await expect(again).toHaveText("Try again", { timeout: 4000 });
+	});
+
+	test("Try again, back online, opens the page that was asked for (#488)", async ({ page, context }) => {
+		await page.goto("/strum");
+		await controlled(page);
+		await context.setOffline(true);
+		await page.goto("/settings");
+		await context.setOffline(false);
+		await page.locator("button.again").click();
+		// /settings itself: signed out, it sends the visitor to sign in.
+		await expect(page).toHaveURL(/\/auth\?redirect=%2Fsettings/);
+	});
+
+	test("a page button presses and the page sinks away before it goes (#488)", async ({ page, context }) => {
+		await page.goto("/strum");
+		await controlled(page);
+		await context.setOffline(true);
+		await page.goto("/settings");
+		const strum = page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name: "Strum", exact: true });
+		await strum.click();
+		// Still here for the motion, then on the kept page.
+		await expect(strum).toHaveClass(/is-going/);
+		await expect(page.locator("body")).toHaveClass(/leaving/);
+		await expect(page).toHaveURL(/\/strum$/);
+		await expect(page.getByRole("heading", { name: "You're offline" })).toHaveCount(0);
+	});
 });

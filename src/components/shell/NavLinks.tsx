@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "@/components/AppLink";
+import { SECTION_TRANSITION } from "@/components/ModuleMain";
+import { useNavStore } from "@/components/nav-progress";
 import { Pick } from "@/components/ui/pick";
 import { NAV_ITEMS, navKeyForPath } from "@/lib/navigation";
 import type { ModuleKey } from "@/lib/moduleForPath";
@@ -20,7 +22,16 @@ export const indicatorColour = (module: ModuleKey): string => (module === "home"
 export default function NavLinks({ className }: { className?: string }) {
 	const pathname = usePathname();
 	const active = navKeyForPath(pathname);
-	const activeItem = NAV_ITEMS.find((i) => i.key === active);
+	// While a navigation is in flight the pick is already on its way there (#489), not
+	// waiting for the page to land; aria-current stays with the page that is showing.
+	const store = useNavStore();
+	const heading = useSyncExternalStore(
+		store.subscribe,
+		() => (store.getPending() ? store.getTarget() : null),
+		() => null,
+	);
+	const shown = (heading && navKeyForPath(heading.split(/[?#]/)[0])) || active;
+	const shownItem = NAV_ITEMS.find((i) => i.key === shown);
 	const navRef = useRef<HTMLElement>(null);
 	const pickRef = useRef<HTMLSpanElement>(null);
 
@@ -31,7 +42,7 @@ export default function NavLinks({ className }: { className?: string }) {
 		const pick = pickRef.current;
 		if (!nav || !pick) return;
 		const place = () => {
-			const link = nav.querySelector<HTMLElement>('[aria-current="page"]');
+			const link = shown ? nav.querySelector<HTMLElement>(`[data-key="${shown}"]`) : null;
 			if (!link || !link.offsetWidth) {
 				pick.dataset.placed = "false";
 				return;
@@ -48,20 +59,22 @@ export default function NavLinks({ className }: { className?: string }) {
 		const observer = new ResizeObserver(place);
 		observer.observe(nav);
 		return () => observer.disconnect();
-	}, [active]);
+	}, [shown]);
 
 	return (
 		<nav
 			ref={navRef}
 			aria-label="Main"
 			className={cn("gp-nav", className)}
-			style={activeItem ? ({ "--gp-ind": indicatorColour(activeItem.module) } as React.CSSProperties) : undefined}
+			style={shownItem ? ({ "--gp-ind": indicatorColour(shownItem.module) } as React.CSSProperties) : undefined}
 		>
 			{NAV_ITEMS.map((item) => (
 				<Link
 					key={item.key}
 					href={item.href}
+					transitionTypes={[SECTION_TRANSITION]}
 					data-m={item.module}
+					data-key={item.key}
 					aria-current={item.key === active ? "page" : undefined}
 				>
 					<NavIcon name={item.key} />

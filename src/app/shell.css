@@ -10,6 +10,13 @@
    (viewport-fit=cover) and the system's bar lies over it — blurred on an iPad (#478).
    The header grows by that inset and pads its content below it; in a browser tab the
    inset is 0. --gp-safe-top is the one name for it, so a test can set it.
+
+   Padding is not enough on an iPad: iPadOS 26 draws its scroll edge effect, a blur, under
+   the status bar whatever lies there, unless a fixed element of one colour covers the top
+   edge — WebKit hit-tests 4px below the middle of the edge and wants it at least 90% of
+   the width and taller than 10px, then fills the system's area with its colour. The edge
+   band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
+   inset only, so it is 0 tall wherever the inset is.
    ===================================================================================== */
 :root {
 	--gp-safe-top: env(safe-area-inset-top, 0px);
@@ -29,11 +36,21 @@
 body {
 	padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 }
+/* Over menus and dialogs too, so they never take the point WebKit samples. */
+.gp-edge-band {
+	position: fixed;
+	inset: 0 0 auto;
+	z-index: 2147483647;
+	height: var(--gp-safe-top);
+	background: var(--gp-page);
+}
 
 @layer components {
 	.gp-header {
 		position: relative;
 		z-index: 20;
+		/* Its own layer in a section transition, so it stays put (below). */
+		view-transition-name: gp-header;
 		flex: none;
 		height: var(--gp-header-h);
 		padding-top: var(--gp-safe-top);
@@ -347,5 +364,142 @@ body {
 		.gp-nav a::after {
 			transition: none;
 		}
+	}
+}
+
+/* The launch curtain (#490, layout.tsx): the installed app's cold start only. The launch
+   image's mark, in the same place and size (LAUNCH_MARK_PX, centred), comes to life: the
+   hand folds and fans open again as the resting pick lifts off and lands — the logo's
+   arrival (pickMark.ts) in CSS, since it plays before React does. LaunchCurtain lifts it
+   once the page is ready; at 1.5 s it lifts itself. Under the edge band. */
+.gp-launch {
+	display: none;
+}
+:root[data-launch] .gp-launch {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483646;
+	display: grid;
+	place-items: center;
+	background: var(--gp-page);
+	animation: gp-launch-out 220ms var(--gp-ease-out) 1500ms forwards;
+}
+:root[data-launch="lifting"] .gp-launch {
+	animation-delay: 0ms;
+}
+@keyframes gp-launch-out {
+	to {
+		opacity: 0;
+		visibility: hidden;
+	}
+}
+.gp-launch-mark {
+	width: 112px;
+	height: 112px;
+}
+.gp-launch-mark [data-pick] {
+	transform-box: view-box;
+	transform-origin: 15px 16.65px;
+	animation: gp-launch-fan 900ms both;
+}
+.gp-launch-mark [data-pick="0"] {
+	--fold: 34deg;
+}
+.gp-launch-mark [data-pick="1"] {
+	--fold: 11deg;
+	animation-delay: 45ms;
+}
+.gp-launch-mark [data-pick="2"] {
+	--fold: -12deg;
+	animation-delay: 90ms;
+}
+.gp-launch-mark [data-pick="3"] {
+	--fold: -35deg;
+	animation-delay: 135ms;
+}
+.gp-launch-mark [data-pick="4"] {
+	transform-origin: 21.6px 20.2px;
+	animation-name: gp-launch-land;
+}
+/* At rest first (the launch image), folded by 30%, fanned out again on a spring. */
+@keyframes gp-launch-fan {
+	0%,
+	12% {
+		transform: none;
+		animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+	}
+	30% {
+		transform: rotate(var(--fold));
+		animation-timing-function: var(--gp-spring-tab);
+	}
+	100% {
+		transform: none;
+	}
+}
+@keyframes gp-launch-land {
+	0%,
+	12% {
+		opacity: 1;
+		transform: none;
+		animation-timing-function: ease-in;
+	}
+	26% {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	50% {
+		opacity: 0;
+		transform: translate(9px, -10px) rotate(32deg);
+		animation-timing-function: var(--gp-spring-press);
+	}
+	60% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 1;
+		transform: none;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gp-launch-mark [data-pick] {
+		animation: none;
+	}
+}
+
+/* A move to another section (#489, ModuleMain): the old page leaves 6px up and fades
+   (spec: screen leave), the new one fades in as its sections rise (gp-rise). The header is
+   shown live, not cross-faded, so the nav's pick keeps sliding; everything else outside
+   <main> (the tab bar, the page colour) changes at once. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(gp-header),
+::view-transition-new(gp-header) {
+	animation: none;
+}
+::view-transition-old(gp-header) {
+	display: none;
+}
+::view-transition-old(.section) {
+	animation: gp-section-leave var(--gp-d-out) var(--gp-ease-out) both;
+}
+::view-transition-new(.section) {
+	animation: gp-section-enter var(--gp-d-in) var(--gp-ease-in) 60ms both;
+}
+@keyframes gp-section-leave {
+	to {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+}
+@keyframes gp-section-enter {
+	from {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
 	}
 }

@@ -187,7 +187,9 @@ export function tabReadResult(outcome: TabTurnOutcome): ToolExecution {
 
 /** The model's strum draft, validated and expanded by the same builder the readers use. */
 export function proposeStrum(input: ProposeStrumInput, index: readonly ChordIndexEntry[]): ToolExecution {
-	const rhythm = input.rhythm.trim();
+	// Spaces are cells (a beat where nothing is struck), so they are kept: a
+	// trimmed "D DU UD " would read as a bar one cell short.
+	const rhythm = input.rhythm.trim() === "" ? "" : input.rhythm;
 	if (rhythm === "" && input.chords.length === 0) {
 		return { result: "The draft has neither a rhythm nor chords.", isError: true };
 	}

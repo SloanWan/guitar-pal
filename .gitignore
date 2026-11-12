@@ -51,3 +51,6 @@ next-env.d.ts
 
 # scratch / temp reports (not committed)
 .tmp/
+
+# MCP quality eval transcripts (src/lib/mcp/__evals__/quality/eval.mts)
+src/lib/mcp/__evals__/quality/runs/

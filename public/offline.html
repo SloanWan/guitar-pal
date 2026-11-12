@@ -1,9 +1,12 @@
 <!doctype html>
 <!--
-  Shown by the service worker (#468) for a page with no copy on this device and
-  no network. Self-contained on purpose: no build file is certain to be cached,
-  so the styles are inline, the fonts are the system's and the only image is the
-  precached app icon. Colours are the Candy tokens' values (src/app/tokens.css).
+  The offline start (#468, #473): shown by the service worker for a page with no copy
+  on this device and no network — an installed app opened offline by a signed-in
+  player lands here, since `/` sends them to /home, which is never kept.
+  Self-contained on purpose: no build file is certain to be cached, so the styles are
+  inline, the icons are the header's own paths (shell/NavIcon.tsx), the fonts are the
+  system's and the only image is the precached app icon. Colours, radii, the press and
+  the grain are the Candy tokens' values (src/app/tokens.css, src/app/primitives.css).
 -->
 <html lang="en">
 	<head>
@@ -23,33 +26,48 @@
 			:root {
 				--page: #f7f7f8;
 				--card: #ffffff;
+				--well: #f1f2f4;
 				--line: #e2e3e6;
 				--ink: #17181b;
 				--ink-3: #5f636a;
-				--strum: #e3f1e5;
-				--strum-ink: #2c4e34;
-				--tab: #e0effa;
-				--tab-ink: #244962;
-				--chords: #ffe5e2;
-				--chords-ink: #572623;
-				--fb: #f7eae2;
-				--fb-ink: #3f2b1f;
+				--face: #ffffff;
+				--face-down: #f1f2f4;
+				--sh-n: #c6c8cd;
+				--ring: 0 0 #0000;
+				--ring-n: inset 0 0 0 1px #c6c8cd;
+				--on: #ffffff;
+				--strum: #4c7a56;
+				--strum-sh: #2c4e34;
+				--tab: #427394;
+				--tab-sh: #244962;
+				--chords: #823f3b;
+				--chords-sh: #572623;
+				--fb: #624634;
+				--fb-sh: #3f2b1f;
+				--grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='linear' slope='2' intercept='-.5'/%3E%3CfeFuncG type='linear' slope='2' intercept='-.5'/%3E%3CfeFuncB type='linear' slope='2' intercept='-.5'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
 				color-scheme: light;
 			}
 			:root[data-theme="dark"] {
 				--page: #18191b;
 				--card: #25262a;
+				--well: #2e3034;
 				--line: #323338;
 				--ink: #f2f3f5;
 				--ink-3: #aaafb7;
-				--strum: #253127;
-				--strum-ink: #cbe2cf;
-				--tab: #223039;
-				--tab-ink: #c7def0;
-				--chords: #3f2624;
-				--chords-ink: #fccec9;
-				--fb: #362b24;
-				--fb-ink: #ead6ca;
+				--face: #37393d;
+				--face-down: #2e3034;
+				--sh-n: #08090a;
+				--ring: inset 1px 1px 0 0 rgba(255, 255, 255, 0.3);
+				--ring-n: inset 1px 1px 0 0 rgba(255, 255, 255, 0.1);
+				--on: #18191b;
+				--strum: #95c19d;
+				--strum-sh: #3b513f;
+				--tab: #8bbbdd;
+				--tab-sh: #364e5e;
+				--chords: #ea756a;
+				--chords-sh: #673d3a;
+				--fb: #ae927f;
+				--fb-sh: #58463a;
 				color-scheme: dark;
 			}
 			* {
@@ -58,97 +76,201 @@
 			body {
 				margin: 0;
 				min-height: 100vh;
+				min-height: 100dvh;
 				display: grid;
 				place-items: center;
-				padding: 24px 16px;
+				padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
 				background: var(--page);
 				color: var(--ink);
 				font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 			}
 			main {
 				width: 100%;
-				max-width: 420px;
-				background: var(--card);
+				max-width: 440px;
+				padding: 24px;
 				border: 1px solid var(--line);
-				border-radius: 20px;
-				padding: 28px 24px 24px;
+				border-radius: 16px;
+				background: var(--card);
 			}
-			img {
-				display: block;
-				width: 56px;
-				height: 56px;
+			.brand {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				font-weight: 700;
+				font-size: 17px;
+			}
+			.brand img {
+				width: 36px;
+				height: 36px;
+				border-radius: 10px;
+			}
+			.notice {
+				display: flex;
+				gap: 12px;
+				align-items: flex-start;
+				margin: 20px 0;
+				padding: 14px 16px;
 				border-radius: 14px;
+				background: var(--well);
+			}
+			.notice svg {
+				flex: none;
+				width: 22px;
+				height: 22px;
+				margin-top: 2px;
+				fill: none;
+				stroke: currentColor;
+				stroke-width: 1.8;
+				stroke-linecap: round;
+				stroke-linejoin: round;
 			}
 			h1 {
-				margin: 16px 0 4px;
-				font-size: 24px;
-				line-height: 1.2;
+				margin: 0 0 2px;
+				font-size: 18px;
+				line-height: 1.3;
 			}
-			p {
+			.notice p {
 				margin: 0;
 				color: var(--ink-3);
+				font-size: 15px;
 			}
-			ul {
-				list-style: none;
-				margin: 20px 0;
-				padding: 0;
+			nav {
 				display: grid;
 				grid-template-columns: 1fr 1fr;
-				gap: 8px;
+				gap: 12px;
+				margin-bottom: 20px;
 			}
-			ul a {
-				display: block;
-				padding: 12px 14px;
-				border-radius: 12px;
-				font-weight: 600;
-				text-decoration: none;
-			}
-			.strum {
-				background: var(--strum);
-				color: var(--strum-ink);
-			}
-			.tab {
-				background: var(--tab);
-				color: var(--tab-ink);
-			}
-			.chords {
-				background: var(--chords);
-				color: var(--chords-ink);
-			}
-			.fb {
-				background: var(--fb);
-				color: var(--fb-ink);
-			}
-			button {
-				width: 100%;
-				padding: 12px;
+			/* The press (primitives.css): a hard tonal shadow down-right, a 1px lift on hover,
+			   sunk into the shadow while held. */
+			.btn {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 10px;
+				height: 56px;
 				border: 0;
-				border-radius: 12px;
-				background: var(--ink);
-				color: var(--page);
-				font: inherit;
+				border-radius: 10px;
+				font-family: inherit;
+				font-size: 16px;
 				font-weight: 600;
-				box-shadow: 0 3px 0 var(--ink-3);
+				line-height: 1;
+				text-decoration: none;
 				cursor: pointer;
+				-webkit-tap-highlight-color: transparent;
+				background-color: var(--face-m);
+				color: var(--on);
+				box-shadow: var(--ring), 3px 3px 0 0 var(--sh-m);
+				transition:
+					transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+					box-shadow 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
 			}
-			button:active {
-				transform: translateY(3px);
-				box-shadow: none;
+			/* Filled faces wear the matte grain; a white face does not. */
+			a.btn {
+				background-image: var(--grain);
+				background-size: 140px;
+				background-blend-mode: overlay;
+			}
+			.btn svg {
+				width: 22px;
+				height: 22px;
+				fill: none;
+				stroke: currentColor;
+				stroke-width: 1.8;
+				stroke-linecap: round;
+				stroke-linejoin: round;
+			}
+			@media (hover: hover) {
+				.btn:hover {
+					transform: translate(-1px, -1px);
+					box-shadow: var(--ring), 4px 4px 0 0 var(--sh-m);
+				}
+			}
+			.btn:active {
+				transform: translate(3px, 3px);
+				box-shadow: var(--ring), 0 0 0 0 var(--sh-m);
+				transition-duration: 90ms;
+			}
+			.btn:focus-visible {
+				outline: none;
+			}
+			[data-m="strum"] {
+				--face-m: var(--strum);
+				--sh-m: var(--strum-sh);
+			}
+			[data-m="tab"] {
+				--face-m: var(--tab);
+				--sh-m: var(--tab-sh);
+			}
+			[data-m="chords"] {
+				--face-m: var(--chords);
+				--sh-m: var(--chords-sh);
+			}
+			[data-m="fb"] {
+				--face-m: var(--fb);
+				--sh-m: var(--fb-sh);
+			}
+			.again {
+				width: 100%;
+				height: 44px;
+				font-size: 15px;
+				--face-m: var(--face);
+				--sh-m: var(--sh-n);
+				--ring: var(--ring-n);
+				color: var(--ink);
+			}
+			.again:active {
+				background-color: var(--face-down);
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.btn,
+				.btn:hover,
+				.btn:active {
+					transform: none;
+					transition: none;
+				}
 			}
 		</style>
 	</head>
 	<body>
 		<main>
-			<img src="/icon-192.png" alt="" />
-			<h1>You're offline</h1>
-			<p>This page isn't saved on this device yet. Once Guitar Pal has been open here online, these work without a connection:</p>
-			<ul>
-				<li><a class="strum" href="/strum">Strum</a></li>
-				<li><a class="tab" href="/tab">Tab</a></li>
-				<li><a class="chords" href="/chords">Chords</a></li>
-				<li><a class="fb" href="/fretboard">Fretboard</a></li>
-			</ul>
-			<button type="button" onclick="location.reload()">Try again</button>
+			<div class="brand">
+				<img src="/icon-192.png" alt="" />
+				Guitar Pal
+			</div>
+			<div class="notice" role="status">
+				<svg viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M2 2l20 20M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 5.2-2.7M19 12.9a10 10 0 0 0-2.4-1.7M2 8.8a15 15 0 0 1 4.2-2.6M22 8.8A15 15 0 0 0 10.7 5.1M12 20h.01" />
+				</svg>
+				<div>
+					<h1>You're offline</h1>
+					<p>The pages below show only what's cached on this device.</p>
+				</div>
+			</div>
+			<nav aria-label="Pages">
+				<a class="btn" data-m="strum" href="/strum">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v15M4.5 15.5 8 19l3.5-3.5M16 20V5M12.5 8.5 16 5l3.5 3.5" /></svg>
+					Strum
+				</a>
+				<a class="btn" data-m="tab" href="/tab">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M3 5.5h18M3 10h18M3 14.5h18M3 19h18" />
+						<path d="M8.5 7.8v0M15.5 12.3v0M11 16.8v0" stroke-width="4.2" />
+					</svg>
+					Tab
+				</a>
+				<a class="btn" data-m="chords" href="/chords">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path d="M5 4h14M5 4v16M9.7 4v16M14.3 4v16M19 4v16M5 9.5h14M5 15h14" />
+						<path d="M12 12.3v0" stroke-width="5" />
+					</svg>
+					Chords
+				</a>
+				<a class="btn" data-m="fb" href="/fretboard">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7.5h20M2 12h20M2 16.5h20M7 5v14M13 5v14M18.5 5v14" /></svg>
+					Fretboard
+				</a>
+			</nav>
+			<button type="button" class="btn again" onclick="location.reload()">Try again</button>
 		</main>
 	</body>
 </html>

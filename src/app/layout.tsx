@@ -46,6 +46,8 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="h-full flex flex-col">
+        {/* Keeps iPadOS from blurring the header in the installed app (#478, shell.css). */}
+        <div className="gp-edge-band" aria-hidden />
         <GrainDefs />
         <NavProgressProvider>
           <NavProgressBar />

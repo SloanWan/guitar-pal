@@ -10,6 +10,13 @@
    (viewport-fit=cover) and the system's bar lies over it — blurred on an iPad (#478).
    The header grows by that inset and pads its content below it; in a browser tab the
    inset is 0. --gp-safe-top is the one name for it, so a test can set it.
+
+   Padding is not enough on an iPad: iPadOS 26 draws its scroll edge effect, a blur, under
+   the status bar whatever lies there, unless a fixed element of one colour covers the top
+   edge — WebKit hit-tests 4px below the middle of the edge and wants it at least 90% of
+   the width and taller than 10px, then fills the system's area with its colour. The edge
+   band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
+   inset only, so it is 0 tall wherever the inset is.
    ===================================================================================== */
 :root {
 	--gp-safe-top: env(safe-area-inset-top, 0px);
@@ -28,6 +35,14 @@
    the column keeps clear of it. 0 everywhere else. */
 body {
 	padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+}
+/* Over menus and dialogs too, so they never take the point WebKit samples. */
+.gp-edge-band {
+	position: fixed;
+	inset: 0 0 auto;
+	z-index: 2147483647;
+	height: var(--gp-safe-top);
+	background: var(--gp-page);
 }
 
 @layer components {

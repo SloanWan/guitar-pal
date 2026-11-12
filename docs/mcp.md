@@ -15,7 +15,9 @@ reading a screenshot needs a model that can see images.
 
 ## Connect
 
-The URL is `https://guitarpal.sloanwan.com/api/mcp`.
+The URL is `https://guitarpal.sloanwan.com/api/mcp`. The quick version of this
+section, with every snippet ready to copy, is a page on the site:
+[guitarpal.sloanwan.com/docs/mcp](https://guitarpal.sloanwan.com/docs/mcp).
 
 - **claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector,
   paste the URL. No authentication.

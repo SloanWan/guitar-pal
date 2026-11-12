@@ -1,0 +1,35 @@
+# Everything that differs between a laptop and the server comes from the
+# environment; compose hands the service the same .env the web app reads.
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: api-service
+  datasource:
+    # A JDBC URL, e.g. jdbc:postgresql://<pooler-host>:5432/postgres?sslmode=require
+    # (session mode; transaction mode on 6543 needs &prepareThreshold=0).
+    url: ${API_DATABASE_URL:}
+    username: ${API_DATABASE_USER:api_service}
+    password: ${API_DATABASE_PASSWORD:}
+    hikari:
+      # The Supabase pooler counts every connection; a few are plenty here.
+      maximum-pool-size: 5
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+guitarpal:
+  supabase:
+    # The project URL; falls back to the web app's variable so one .env serves both.
+    url: ${SUPABASE_URL:${NEXT_PUBLIC_SUPABASE_URL:}}
+    # Legacy projects only (HS256). Empty means HS256 tokens are refused.
+    jwt-secret: ${SUPABASE_JWT_SECRET:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

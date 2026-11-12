@@ -46,3 +46,21 @@ services:
       # think and reads tab slowly (calibration.md §10).
       BOOK_PARSE_PROVIDER: anthropic
     restart: unless-stopped
+
+  api:
+    # The Java service (#472). Opt-in like `book-service`: nothing calls it until
+    # an endpoint is switched over (JAVA_API_URL=http://api:8080 in .env), so a
+    # plain deploy neither builds nor starts it. Bring it up with
+    # `docker compose --profile api up --build -d`.
+    profiles: ["api"]
+    build:
+      context: ./api-service
+    # The same .env: it reads NEXT_PUBLIC_SUPABASE_URL for the JWT issuer and
+    # JWKS, SUPABASE_JWT_SECRET (legacy projects only) and API_DATABASE_URL /
+    # API_DATABASE_USER / API_DATABASE_PASSWORD (scripts/create-api-service-role.sql).
+    # No ports — only `web` talks to it.
+    env_file: .env
+    # The JVM sizes its heap off this (MaxRAMPercentage in the Dockerfile);
+    # without a limit it would size it off the whole server, which `web` shares.
+    mem_limit: 512m
+    restart: unless-stopped

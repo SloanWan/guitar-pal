@@ -227,8 +227,48 @@
 				--ring: var(--ring-n);
 				color: var(--ink);
 			}
-			.again:active {
+			.again:active,
+			.again[data-state="trying"] {
 				background-color: var(--face-down);
+			}
+			/* Try again while it tries: a spinner and the line it is on, in the same box. */
+			.spin {
+				display: none;
+				width: 16px;
+				height: 16px;
+				border: 2px solid currentColor;
+				border-right-color: transparent;
+				border-radius: 50%;
+				animation: spin 700ms linear infinite;
+			}
+			.again[data-state="trying"] .spin {
+				display: block;
+			}
+			.again[data-state="trying"] {
+				cursor: progress;
+			}
+			.again[data-state="failed"] {
+				color: var(--ink-3);
+			}
+			@keyframes spin {
+				to {
+					transform: rotate(1turn);
+				}
+			}
+			/* Leaving for a page: the pressed button stays down while the rest sinks away;
+			   the page it opens rises in (gp-rise). */
+			.btn.is-going {
+				transform: translate(3px, 3px);
+				box-shadow: var(--ring), 0 0 0 0 var(--sh-m);
+				transition-duration: 90ms;
+			}
+			.leaving main > :not(nav),
+			.leaving nav > :not(.is-going) {
+				opacity: 0;
+				transform: translateY(8px);
+				transition:
+					opacity 160ms ease-in 60ms,
+					transform 160ms ease-in 60ms;
 			}
 			@media (prefers-reduced-motion: reduce) {
 				.btn,
@@ -236,6 +276,14 @@
 				.btn:active {
 					transform: none;
 					transition: none;
+				}
+				.spin {
+					animation: pulse 1.2s ease-in-out infinite;
+				}
+				@keyframes pulse {
+					50% {
+						opacity: 0.3;
+					}
 				}
 			}
 		</style>
@@ -280,7 +328,77 @@
 					Fretboard
 				</a>
 			</nav>
-			<button type="button" class="btn again" onclick="location.reload()">Try again</button>
+			<button type="button" class="btn again"><span class="spin" aria-hidden="true"></span><span class="say" aria-live="polite">Try again</span></button>
 		</main>
+		<script>
+			(function () {
+				var calm = matchMedia("(prefers-reduced-motion: reduce)");
+				var LEAVE_MS = 240;
+
+				// A page button presses and the rest sinks away before the page goes.
+				document.querySelectorAll("nav a.btn").forEach(function (link) {
+					link.addEventListener("click", function (e) {
+						if (calm.matches || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+						e.preventDefault();
+						link.classList.add("is-going");
+						document.body.classList.add("leaving");
+						setTimeout(function () {
+							location.assign(link.href);
+						}, LEAVE_MS);
+					});
+				});
+				// Back from that page out of the back-forward cache: as it was.
+				addEventListener("pageshow", function (e) {
+					if (!e.persisted) return;
+					document.body.classList.remove("leaving");
+					document.querySelectorAll(".is-going").forEach(function (el) {
+						el.classList.remove("is-going");
+					});
+				});
+
+				// Try again asks the network for something the service worker never answers
+				// (it leaves every non-GET alone): an answer means the connection is back.
+				var again = document.querySelector(".again");
+				var say = again.querySelector(".say");
+				var PROBE_MS = 5000;
+				var SPIN_AT_LEAST_MS = 800;
+				var FAILED_MS = 2000;
+				function show(state, text) {
+					again.dataset.state = state;
+					again.setAttribute("aria-busy", state === "trying" ? "true" : "false");
+					say.textContent = text;
+				}
+				function probe() {
+					var controller = new AbortController();
+					var timer = setTimeout(function () {
+						controller.abort();
+					}, PROBE_MS);
+					return fetch("/sw.js", { method: "HEAD", cache: "no-store", signal: controller.signal })
+						.then(function (r) {
+							return r.ok;
+						})
+						.catch(function () {
+							return false;
+						})
+						.finally(function () {
+							clearTimeout(timer);
+						});
+				}
+				again.addEventListener("click", function () {
+					if (again.dataset.state === "trying") return;
+					show("trying", "Connecting…");
+					var started = Date.now();
+					probe().then(function (online) {
+						setTimeout(function () {
+							if (online) return location.reload();
+							show("failed", "Still offline");
+							setTimeout(function () {
+								if (again.dataset.state === "failed") show("", "Try again");
+							}, FAILED_MS);
+						}, Math.max(0, SPIN_AT_LEAST_MS - (Date.now() - started)));
+					});
+				});
+			})();
+		</script>
 	</body>
 </html>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
 import type { User } from "@supabase/supabase-js";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
@@ -52,6 +53,8 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 
 	/** Saves a tab of the player's own; a new one opens. Returns what was stored (its name may have gained a counter). */
 	function save(pattern: FingerpickPattern): FingerpickPattern {
+		// Offline the controls that save are disabled; this is the last line (#469).
+		if (refuseOfflineWrite(user)) return selected;
 		const saved = library.saveCustomPattern(pattern);
 		if (saved.isNew) select(saved.pattern);
 		else if (saved.pattern.id === selected.id) onChanged(saved.pattern);
@@ -60,12 +63,13 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 
 	/** "Open at … from now on": the tempo already plays, so nothing restarts. */
 	function saveTempo(bpm: number) {
+		if (refuseOfflineWrite(user)) return;
 		library.saveCustomPattern({ ...selected, bpm });
 	}
 
 	/** The player's own tab's reference links; nothing that plays changes, so nothing restarts. */
 	function setReferences(references: TabReference[]) {
-		if (!owned) return;
+		if (!owned || refuseOfflineWrite(user)) return;
 		const { references: _old, ...rest } = selected;
 		void _old;
 		library.saveCustomPattern(references.length > 0 ? { ...rest, references } : rest);
@@ -76,10 +80,14 @@ export function useTabSession({ shared, user, loading, onOpen, onChanged }: Args
 		library.deleteCustomPattern(id);
 	}
 
-	/** The player's own tab is saved with its capo; a preset or a share keeps it for the visit. */
+	/**
+	 * The player's own tab is saved with its capo; a preset or a share keeps it
+	 * for the visit — and so does the player's own offline, where it cannot be
+	 * saved (#469) but is still worth playing with.
+	 */
 	function setCapo(fret: number) {
 		const next = setPatternCapo(selected, fret);
-		if (owned) {
+		if (owned && !writesBlocked(user)) {
 			save(next);
 			return;
 		}

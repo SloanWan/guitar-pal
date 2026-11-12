@@ -1,6 +1,7 @@
 "use client";
 
 import { ClipboardPaste, PanelRightClose, Plus } from "lucide-react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Button } from "@/components/ui/button";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
@@ -36,6 +37,8 @@ export default function TabLibrary({
 	variant,
 	onFold,
 }: Props) {
+	// Both end in a tab saved to the library, so offline they wait (#469).
+	const gate = useWriteGate();
 	return (
 		<>
 			<div className="flex items-center gap-1.5">
@@ -44,13 +47,14 @@ export default function TabLibrary({
 					variant="secondary"
 					size="xs"
 					onClick={onPaste}
-					title="Paste a text tab and pick its rhythm by ear"
+					disabled={gate.blocked}
+					title={gate.reason ?? "Paste a text tab and pick its rhythm by ear"}
 					className={variant === "sheet" ? "ml-auto" : undefined}
 				>
 					<ClipboardPaste aria-hidden />
 					Paste
 				</Button>
-				<Button variant="secondary" size="xs" onClick={onNew}>
+				<Button variant="secondary" size="xs" onClick={onNew} disabled={gate.blocked} title={gate.reason}>
 					<Plus aria-hidden />
 					New
 				</Button>

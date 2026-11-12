@@ -983,6 +983,8 @@
 	}
 	.gp-sheet[data-side="right"] {
 		top: 0;
+		/* Full height, so its head would sit under the system's top bar in an installed app (#478). */
+		padding-top: var(--gp-safe-top);
 		left: auto;
 		width: 380px;
 		max-width: 100vw;

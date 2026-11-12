@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useShareGate, useWriteGate } from "@/components/offline/WriteGate";
 import { Loader2, PanelRightOpen, Pencil, Share2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -60,6 +61,8 @@ export default function TabHeader({
 	onReferences,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const gate = useWriteGate();
+	const shareGate = useShareGate();
 	return (
 		<div className="tb-titlerow">
 			<span className="pb-lab pb-num tb-meta">
@@ -90,9 +93,9 @@ export default function TabHeader({
 						className="pb-icon"
 						data-anim="edit"
 						onClick={onEdit}
-						disabled={!owned}
+						disabled={!owned || gate.blocked}
 						aria-label="Edit this tab"
-						title={owned ? "Edit this tab" : "Presets can't be edited"}
+						title={gate.reason ?? (owned ? "Edit this tab" : "Presets can't be edited")}
 					>
 						<Pencil aria-hidden />
 					</button>
@@ -103,10 +106,10 @@ export default function TabHeader({
 						className="pb-icon"
 						data-anim="share"
 						onClick={onShare}
-						disabled={sharing}
+						disabled={sharing || shareGate.blocked}
 						aria-busy={sharing || undefined}
 						aria-label="Share this tab"
-						title={sharing ? "Making the link…" : "Copy a link to this tab"}
+						title={shareGate.reason ?? (sharing ? "Making the link…" : "Copy a link to this tab")}
 					>
 						{sharing ? <Loader2 aria-hidden className="animate-spin" /> : <Share2 aria-hidden />}
 					</button>
@@ -118,9 +121,9 @@ export default function TabHeader({
 								type="button"
 								className="pb-icon"
 								data-anim="delete"
-								disabled={!owned}
+								disabled={!owned || gate.blocked}
 								aria-label="Delete this tab"
-								title={owned ? "Delete this tab" : "Presets can't be deleted"}
+								title={gate.reason ?? (owned ? "Delete this tab" : "Presets can't be deleted")}
 							>
 								<Trash2 aria-hidden />
 							</button>

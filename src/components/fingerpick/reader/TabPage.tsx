@@ -1,6 +1,7 @@
 "use client";
 
 import "@/components/library/library.css";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
 import "./tab.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelRightOpen } from "lucide-react";
@@ -231,150 +232,152 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 	};
 
 	return (
-		<div className="tb-page" data-m="tab">
-			<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
-				<div className="tb-stage-wrap pb-area">
-					{/* Where the library's own fold button sits, so folding and unfolding never move it. */}
-					{!isShared && folded && (
-						<button
-							type="button"
-							className="pb-icon lib-fab"
-							onClick={() => fold(false)}
-							aria-label="Show the tab list"
-							title="Show the tab list"
-							aria-expanded={false}
-						>
-							<PanelRightOpen aria-hidden />
-						</button>
-					)}
-					<main ref={stageRef} className="tb-stage">
-						<div ref={stageInRef} className="tb-stage-in gp-rise">
-							{!session.restored ? (
-								<TabSkeleton />
-							) : (
-								<>
-									<TabHeader
-										name={pattern.name}
-										meta={meta}
-										capo={capo}
-										onCapo={session.setCapo}
-										onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
-										onEdit={isShared ? undefined : () => openEditor({ kind: "edit", id: pattern.id })}
-										onShare={isShared ? undefined : () => void shareState.share()}
-										sharing={shareState.sharing}
-										onDelete={isShared ? undefined : () => session.remove(pattern.id)}
-										owned={session.owned}
-										references={pattern.references ?? NO_REFERENCES}
-										onReferences={session.setReferences}
-										shared={
-											isShared
-												? {
-														onImport: shareState.importShared,
-														importing: shareState.importing,
-														disabled: loading || session.isLoading,
-													}
-												: undefined
-										}
-									/>
-									{isShared && <ShareNote guest={!loading && !user} />}
-									<TabToolbar
-										onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
-										hasChords={chordLine.hasChords}
-										prefs={prefs}
-										capo={capo}
-										onCapo={session.setCapo}
-										sectionMode={sectionMode}
-										sectionHint={sectionMode ? sectionHint(section) : null}
-										onSectionMode={toggleSectionMode}
-										autoScroll={{ on: autoScroll, toggle: () => setAutoScroll((on) => !on) }}
-									/>
-									<ShapesRetry chords={chordLine.shapeChords} />
-									<TabSheet
-										rows={rows}
-										timeSignature={pattern.timeSignature}
-										renderContext={renderContext}
-										chordDiagram={chordLine.chordDiagram}
-										chordDiagramSize={chordLine.chordDiagramSize}
-										offShapeAt={chordLine.offShapeAt}
-										pitchLabel={chordLine.pitchLabel}
-										viewerRef={setViewer}
-										rowsRef={rowsRef}
-										rowRefs={playback.cursor.rowRefs}
-										cursorRef={playback.cursor.cursorRef}
-										highlightRef={playback.cursor.measureHighlightRef}
-										bands={bands}
-										onClick={playback.handleTabClick}
-									/>
-								</>
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="tb-page" data-m="tab">
+				<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
+					<div className="tb-stage-wrap pb-area">
+						{/* Where the library's own fold button sits, so folding and unfolding never move it. */}
+						{!isShared && folded && (
+							<button
+								type="button"
+								className="pb-icon lib-fab"
+								onClick={() => fold(false)}
+								aria-label="Show the tab list"
+								title="Show the tab list"
+								aria-expanded={false}
+							>
+								<PanelRightOpen aria-hidden />
+							</button>
+						)}
+						<main ref={stageRef} className="tb-stage">
+							<div ref={stageInRef} className="tb-stage-in gp-rise">
+								{!session.restored ? (
+									<TabSkeleton />
+								) : (
+									<>
+										<TabHeader
+											name={pattern.name}
+											meta={meta}
+											capo={capo}
+											onCapo={session.setCapo}
+											onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
+											onEdit={isShared ? undefined : () => openEditor({ kind: "edit", id: pattern.id })}
+											onShare={isShared ? undefined : () => void shareState.share()}
+											sharing={shareState.sharing}
+											onDelete={isShared ? undefined : () => session.remove(pattern.id)}
+											owned={session.owned}
+											references={pattern.references ?? NO_REFERENCES}
+											onReferences={session.setReferences}
+											shared={
+												isShared
+													? {
+															onImport: shareState.importShared,
+															importing: shareState.importing,
+															disabled: loading || session.isLoading,
+														}
+													: undefined
+											}
+										/>
+										{isShared && <ShareNote guest={!loading && !user} />}
+										<TabToolbar
+											onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
+											hasChords={chordLine.hasChords}
+											prefs={prefs}
+											capo={capo}
+											onCapo={session.setCapo}
+											sectionMode={sectionMode}
+											sectionHint={sectionMode ? sectionHint(section) : null}
+											onSectionMode={toggleSectionMode}
+											autoScroll={{ on: autoScroll, toggle: () => setAutoScroll((on) => !on) }}
+										/>
+										<ShapesRetry chords={chordLine.shapeChords} />
+										<TabSheet
+											rows={rows}
+											timeSignature={pattern.timeSignature}
+											renderContext={renderContext}
+											chordDiagram={chordLine.chordDiagram}
+											chordDiagramSize={chordLine.chordDiagramSize}
+											offShapeAt={chordLine.offShapeAt}
+											pitchLabel={chordLine.pitchLabel}
+											viewerRef={setViewer}
+											rowsRef={rowsRef}
+											rowRefs={playback.cursor.rowRefs}
+											cursorRef={playback.cursor.cursorRef}
+											highlightRef={playback.cursor.measureHighlightRef}
+											bands={bands}
+											onClick={playback.handleTabClick}
+										/>
+									</>
+								)}
+							</div>
+						</main>
+						<PlayBar
+							module="tab"
+							pickRef={pickRef}
+							status={{
+								bar: bar + 1,
+								bars,
+								now: nowChord ? chordSymbolLabel(nowChord) : null,
+								next: nextChord ? chordSymbolLabel(nextChord) : null,
+								idle: "No chords",
+							}}
+							playing={playback.isPlaying}
+							preparing={!playback.isLoaded && !playback.loadFailed}
+							canPlay={playback.isLoaded || playback.loadFailed}
+							onTogglePlay={playback.togglePlay}
+							onStop={playback.stop}
+							canStop={playback.isPlaying || playback.isPaused || playback.countIn.remaining !== null}
+							countIn={playback.countIn}
+							tempo={{
+								bpm: playback.bpm,
+								onBpm: playback.setBpm,
+								onSliding: playback.slideBpm,
+								meter: pattern.timeSignature,
+								defaultBpm: tabBpm(pattern),
+								onSaveDefault: session.owned ? () => session.saveTempo(playback.bpm) : undefined,
+							}}
+							tickLevel={playback.tickLevel}
+							onTickLevel={playback.setTickLevel}
+							tickLevels={TAB_TICK_LEVELS}
+							loop={playback.loop}
+							onLoop={playback.setLoop}
+							loopGap={playback.loopGap}
+							onLoopGap={playback.setLoopGap}
+							dock={dock}
+							onDock={moveDock}
+							canDock={canDock}
+							soundKind="notes"
+							sound={playback.notes}
+							click={playback.click}
+							speedUp={playback.speedUp}
+						/>
+					</div>
+
+					{!isShared && (
+						<aside className="lib-aside" aria-label="Tab library">
+							{!folded && (
+								<TabLibrary {...libraryProps} variant="aside" onSelect={session.select} onFold={() => fold(true)} />
 							)}
-						</div>
-					</main>
-					<PlayBar
-						module="tab"
-						pickRef={pickRef}
-						status={{
-							bar: bar + 1,
-							bars,
-							now: nowChord ? chordSymbolLabel(nowChord) : null,
-							next: nextChord ? chordSymbolLabel(nextChord) : null,
-							idle: "No chords",
-						}}
-						playing={playback.isPlaying}
-						preparing={!playback.isLoaded && !playback.loadFailed}
-						canPlay={playback.isLoaded || playback.loadFailed}
-						onTogglePlay={playback.togglePlay}
-						onStop={playback.stop}
-						canStop={playback.isPlaying || playback.isPaused || playback.countIn.remaining !== null}
-						countIn={playback.countIn}
-						tempo={{
-							bpm: playback.bpm,
-							onBpm: playback.setBpm,
-							onSliding: playback.slideBpm,
-							meter: pattern.timeSignature,
-							defaultBpm: tabBpm(pattern),
-							onSaveDefault: session.owned ? () => session.saveTempo(playback.bpm) : undefined,
-						}}
-						tickLevel={playback.tickLevel}
-						onTickLevel={playback.setTickLevel}
-						tickLevels={TAB_TICK_LEVELS}
-						loop={playback.loop}
-						onLoop={playback.setLoop}
-						loopGap={playback.loopGap}
-						onLoopGap={playback.setLoopGap}
-						dock={dock}
-						onDock={moveDock}
-						canDock={canDock}
-						soundKind="notes"
-						sound={playback.notes}
-						click={playback.click}
-						speedUp={playback.speedUp}
-					/>
+						</aside>
+					)}
 				</div>
 
 				{!isShared && (
-					<aside className="lib-aside" aria-label="Tab library">
-						{!folded && (
-							<TabLibrary {...libraryProps} variant="aside" onSelect={session.select} onFold={() => fold(true)} />
-						)}
-					</aside>
+					<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Tabs" fixedHeight>
+						<div className="flex min-h-0 flex-col gap-3" data-m="tab">
+							<TabLibrary
+								{...libraryProps}
+								variant="sheet"
+								onSelect={(next) => {
+									session.select(next);
+									setLibraryOpen(false);
+								}}
+							/>
+						</div>
+					</Sheet>
 				)}
+				<TextTabDialog open={pasteOpen} onClose={() => setPasteOpen(false)} />
 			</div>
-
-			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title="Tabs" fixedHeight>
-					<div className="flex min-h-0 flex-col gap-3" data-m="tab">
-						<TabLibrary
-							{...libraryProps}
-							variant="sheet"
-							onSelect={(next) => {
-								session.select(next);
-								setLibraryOpen(false);
-							}}
-						/>
-					</div>
-				</Sheet>
-			)}
-			<TextTabDialog open={pasteOpen} onClose={() => setPasteOpen(false)} />
-		</div>
+		</WriteGateProvider>
 	);
 }

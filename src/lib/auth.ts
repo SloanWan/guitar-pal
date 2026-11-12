@@ -1,6 +1,7 @@
-import type { UserIdentity } from "@supabase/supabase-js";
+import { isAuthRetryableFetchError, type UserIdentity } from "@supabase/supabase-js";
 import { createClient } from "./supabase";
 import { AVATAR_COLOR_KEY, AVATAR_ICON_KEY, NICKNAME_KEY } from "./profile";
+import { forgetRememberedUser, rememberedUser, rememberUser } from "./offline/rememberedUser";
 
 export async function signUp(email: string, password: string) {
 	const supabase = createClient();
@@ -20,12 +21,52 @@ export async function signOut() {
 	return { error };
 }
 
+/**
+ * How long each step of the sign-in check may take before Supabase is treated
+ * as unreachable (#475). A connection that is up but carries nothing never
+ * fails a request, it only leaves it waiting — and the page waits on this.
+ */
+export const SIGN_IN_CHECK_TIMEOUT_MS = 5000;
+
+const TIMED_OUT = Symbol("timed out");
+
+/** The answer, or `TIMED_OUT` once `ms` have passed; the timer goes either way. */
+function within<T>(answer: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const late = new Promise<typeof TIMED_OUT>((resolve) => {
+		timer = setTimeout(() => resolve(TIMED_OUT), ms);
+	});
+	return Promise.race([answer, late]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * The signed-in user, checked with Supabase. When Supabase cannot be reached
+ * (offline, #468) — or does not answer in time (#475) — the session stored in
+ * this browser answers instead, so a player is not taken for a guest; past the
+ * access token's life there is no usable session (reading it would try to
+ * refresh it, which can hang just the same), and the last user Supabase
+ * confirmed here answers (#469). Both are unchecked, which is fine for what the
+ * page shows, since every read and write is still checked by the database.
+ */
 export async function getUser() {
 	const supabase = createClient();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	return user;
+	const checked = await within(supabase.auth.getUser(), SIGN_IN_CHECK_TIMEOUT_MS);
+	if (checked !== TIMED_OUT) {
+		const {
+			data: { user },
+			error,
+		} = checked;
+		if (user) {
+			rememberUser(user);
+			return user;
+		}
+		if (!isAuthRetryableFetchError(error)) {
+			forgetRememberedUser();
+			return null;
+		}
+	}
+	const stored = await within(supabase.auth.getSession(), SIGN_IN_CHECK_TIMEOUT_MS);
+	return (stored === TIMED_OUT ? null : stored.data.session?.user) ?? rememberedUser();
 }
 
 /**

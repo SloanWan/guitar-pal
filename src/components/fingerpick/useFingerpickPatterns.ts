@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
+import { refuseOfflineWrite } from "@/lib/offline/writes";
+import { useLibraryCopy } from "@/hooks/useLibraryCopy";
 import { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import { uniquePatternName } from "@/lib/uniquePatternName";
 import { createClient } from "@/lib/supabase";
 import {
 	loadUserFingerpickPatterns,
+	loadUserFingerpickFavourites,
 	saveUserFingerpickPattern,
 	deleteUserFingerpickPattern,
 	mergeLocalFingerpickPatternsToSupabase,
@@ -101,12 +104,11 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 				console.error(e);
 			}
 
-			const { data: favs, error: favsError } = await supabase
-				.from("user_favourite_fingerpick_patterns")
-				.select("pattern_id")
-				.eq("user_id", currentUser.id);
-			if (favsError) console.error(favsError);
-			setFavouriteIds((favs ?? []).map((r) => r.pattern_id as string));
+			try {
+				setFavouriteIds(await loadUserFingerpickFavourites(supabase, currentUser.id));
+			} catch (e) {
+				console.error(e);
+			}
 			setIsLoading(false);
 
 			if (merged) {
@@ -119,6 +121,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	}, [user?.id]);
 
 	function toggleFavourite(patternId: string) {
+		if (refuseOfflineWrite(user)) return;
 		const isFav = favouriteIds.includes(patternId);
 		const updated = isFav ? favouriteIds.filter((id) => id !== patternId) : [...favouriteIds, patternId];
 		setFavouriteIds(updated);
@@ -172,6 +175,7 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 	}
 
 	function deleteCustomPattern(patternId: string) {
+		if (refuseOfflineWrite(user)) return;
 		setCustomPatterns((prev) => prev.filter((p) => p.id !== patternId));
 		if (selectedPattern.id === patternId) setSelectedPattern(PRESET_FINGERPICK_PATTERNS[0]);
 
@@ -195,6 +199,10 @@ export function useFingerpickPatterns(user: User | null, loading: boolean) {
 		})();
 	}
 
+
+	// This device's copy, kept in step with the page's writes (#469).
+	useLibraryCopy("fingerpickPatterns", user?.id, customPatterns, !isLoading);
+	useLibraryCopy("fingerpickFavourites", user?.id, favouriteIds, !isLoading);
 
 	return {
 		patterns,

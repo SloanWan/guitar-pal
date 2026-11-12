@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase";
 import { getUser } from "@/lib/auth";
+import { readThrough } from "@/lib/offline/libraryCopy";
 import {
 	rawUserVoicingId,
 	rowToUserVoicing,
@@ -69,18 +70,20 @@ export async function deleteAccountVoicing(id: string, userId: string): Promise<
 	if (error) throw new Error(error.message);
 }
 
-/** Every shape one signed-in player has written. */
+/** Every shape one signed-in player has written. Offline, this device's copy (#469). */
 export async function fetchAccountVoicings(userId: string): Promise<UserChordVoicing[]> {
-	// select("*") on purpose: an explicit column list is a second place to
-	// remember a new column, and forgetting it fails silently.
-	const { data, error } = await createClient()
-		.from("user_chord_voicings")
-		.select("*")
-		.eq("user_id", userId);
-	if (error) throw new Error(error.message);
-	return (data ?? [])
-		.map((row) => rowToUserVoicing(row as UserVoicingRow))
-		.filter((v): v is UserChordVoicing => v !== null);
+	return readThrough("chordVoicings", userId, async () => {
+		// select("*") on purpose: an explicit column list is a second place to
+		// remember a new column, and forgetting it fails silently.
+		const { data, error } = await createClient()
+			.from("user_chord_voicings")
+			.select("*")
+			.eq("user_id", userId);
+		if (error) throw new Error(error.message);
+		return (data ?? [])
+			.map((row) => rowToUserVoicing(row as UserVoicingRow))
+			.filter((v): v is UserChordVoicing => v !== null);
+	});
 }
 
 /** The player's shapes, wherever they are kept. */

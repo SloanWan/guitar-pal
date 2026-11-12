@@ -19,7 +19,8 @@ export async function saveLastPattern(
 	tool: PatternTool,
 	patternId: string,
 ): Promise<void> {
-	if (!user) return;
+	// Offline it can only fail; the next pattern opened online records itself (#469).
+	if (!user || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
 	const { error } = await supabase
 		.from("user_last_pattern")
 		.upsert(

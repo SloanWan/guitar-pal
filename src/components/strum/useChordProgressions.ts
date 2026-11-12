@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
+import { refuseOfflineWrite } from "@/lib/offline/writes";
+import { useLibraryCopy } from "@/hooks/useLibraryCopy";
 import type { ChordProgression } from "@/lib/strumPatterns";
 import { createClient } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
 import {
+	fetchAccountProgressions,
 	migrateGuestStrumStorage,
 	progressionColumns,
-	progressionFromRow,
-	type ProgressionRow,
 	readStoredProgressions,
 	STRUM_PROGRESSIONS_STORAGE_KEY,
 } from "@/lib/strumStorage";
@@ -60,21 +61,11 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 				}
 			}
 
-			const { data, error } = await supabase
-				.from("user_pattern_progressions")
-				// select("*"), as useStrumPatterns does: an explicit column list is a
-				// second place to remember a new column, and forgetting it is silent —
-				// the field writes fine and simply never comes back, which is how the
-				// reconcile fields of an earlier model were dead on arrival until
-				// this was noticed.
-				.select("*")
-				.eq("user_id", currentUserId);
-			if (error) console.error("[useChordProgressions] load failed:", error.message);
-			setProgressions(
-				(data ?? [])
-					.map((row) => progressionFromRow(row as ProgressionRow))
-					.filter((p): p is ChordProgression => p !== null),
-			);
+			try {
+				setProgressions(await fetchAccountProgressions(supabase, currentUserId));
+			} catch (e) {
+				console.error("[useChordProgressions] load failed:", e);
+			}
 			setProgressionsLoading(false);
 		}
 
@@ -87,6 +78,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 	}
 
 	function handleSaveProgression(progression: ChordProgression) {
+		if (refuseOfflineWrite(user)) return;
 		const exists = progressions.some((p) => p.id === progression.id);
 		persist(
 			exists
@@ -108,6 +100,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 	}
 
 	function handleDeleteProgression(id: string) {
+		if (refuseOfflineWrite(user)) return;
 		persist(progressions.filter((p) => p.id !== id));
 		if (!user) return;
 		(async () => {
@@ -130,6 +123,7 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 	 * deleted, so no row is left pointing at something that no longer exists.
 	 */
 	function handleDeletePatternProgressions(patternId: string) {
+		if (refuseOfflineWrite(user)) return;
 		if (!progressions.some((p) => p.patternId === patternId)) return;
 		persist(progressions.filter((p) => p.patternId !== patternId));
 		if (!user) return;
@@ -147,6 +141,9 @@ export function useChordProgressions(user: User | null, loading: boolean) {
 			}
 		})();
 	}
+
+	// This device's copy, kept in step with the page's writes (#469).
+	useLibraryCopy("progressions", userId, progressions, !progressionsLoading);
 
 	return {
 		progressions,

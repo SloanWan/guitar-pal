@@ -14,6 +14,7 @@ import {
 import { normalizeCapo, progressionDisplayName } from "./strumProgressions";
 import { normalizeMeter, type Meter } from "./strumMeter";
 import { alignToRhythm, extraBarsFromColumn, followsRhythm, patternRhythm, rhythmOfBars, withRhythm } from "./strumRhythm";
+import { readThrough } from "./offline/libraryCopy";
 
 /**
  * Where a strum pattern and its progressions are written — the row shapes
@@ -125,6 +126,50 @@ export function progressionFromRow(row: ProgressionRow): ChordProgression | null
 		bpm: row.bpm === null ? undefined : normalizeBpm(row.bpm),
 		capo: normalizeCapo(row.capo),
 	};
+}
+
+/** A signed-in player's patterns, newest first; offline, this device's copy (#469). */
+export async function fetchAccountPatterns(supabase: SupabaseClient, userId: string): Promise<StrumPattern[]> {
+	return readThrough("strumPatterns", userId, async () => {
+		const { data, error } = await supabase
+			.from("user_strum_patterns")
+			.select("*")
+			.eq("user_id", userId)
+			// Newest first: the pattern someone just made is the one they are
+			// working on, and the database is the only place the creation time
+			// is recorded.
+			.order("created_at", { ascending: false });
+		if (error) throw new Error(error.message);
+		return (data ?? []).map((row) => patternFromRow(row as StrumPatternRow));
+	});
+}
+
+/** The ids of the patterns a signed-in player keeps; offline, this device's copy (#469). */
+export async function fetchAccountFavouritePatternIds(supabase: SupabaseClient, userId: string): Promise<string[]> {
+	return readThrough("strumFavourites", userId, async () => {
+		const { data, error } = await supabase.from("user_favourite_patterns").select("pattern_id").eq("user_id", userId);
+		if (error) throw new Error(error.message);
+		return (data ?? []).map((r) => r.pattern_id as string);
+	});
+}
+
+/** Every progression a signed-in player has, across patterns; offline, this device's copy (#469). */
+export async function fetchAccountProgressions(supabase: SupabaseClient, userId: string): Promise<ChordProgression[]> {
+	return readThrough("progressions", userId, async () => {
+		const { data, error } = await supabase
+			.from("user_pattern_progressions")
+			// select("*"), as the patterns are read: an explicit column list is a
+			// second place to remember a new column, and forgetting it is silent —
+			// the field writes fine and simply never comes back, which is how the
+			// reconcile fields of an earlier model were dead on arrival until
+			// this was noticed.
+			.select("*")
+			.eq("user_id", userId);
+		if (error) throw new Error(error.message);
+		return (data ?? [])
+			.map((row) => progressionFromRow(row as ProgressionRow))
+			.filter((p): p is ChordProgression => p !== null);
+	});
 }
 
 /** A guest's stored progressions, with the same guard the hook applies on read. */

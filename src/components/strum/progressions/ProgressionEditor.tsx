@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties } from "react";
+import { useWriteGate } from "@/components/offline/WriteGate";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
@@ -79,6 +80,7 @@ export default function ProgressionEditor({
 	pendingSwitch,
 }: Props) {
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const gate = useWriteGate();
 	const [measure, width, scroller] = useElementWidth<HTMLDivElement>();
 	const capo = progressionCapo(progression);
 	const bars = progression.bars;
@@ -129,8 +131,9 @@ export default function ProgressionEditor({
 						data-tone="bad"
 						data-anim="delete"
 						aria-expanded={confirmDelete}
+						disabled={gate.blocked}
 						aria-label="Delete this progression"
-						title="Delete this progression"
+						title={gate.reason ?? "Delete this progression"}
 						onClick={() => setConfirmDelete((v) => !v)}
 					>
 						<Trash2 aria-hidden />
@@ -175,7 +178,7 @@ export default function ProgressionEditor({
 					<Button variant="secondary" size="xs" onClick={pendingSwitch.onDiscard}>
 						Discard
 					</Button>
-					<Button size="xs" onClick={pendingSwitch.onSave}>
+					<Button size="xs" onClick={pendingSwitch.onSave} disabled={gate.blocked} title={gate.reason}>
 						Save
 					</Button>
 				</div>
@@ -186,10 +189,10 @@ export default function ProgressionEditor({
 						<Button variant="ghost" size="xs" onClick={draft.revert}>
 							Revert
 						</Button>
-						<Button variant="secondary" size="xs" onClick={onSaveAsNew}>
+						<Button variant="secondary" size="xs" onClick={onSaveAsNew} disabled={gate.blocked} title={gate.reason}>
 							Save as new
 						</Button>
-						<Button size="xs" onClick={onSave}>
+						<Button size="xs" onClick={onSave} disabled={gate.blocked} title={gate.reason}>
 							Save
 						</Button>
 					</div>

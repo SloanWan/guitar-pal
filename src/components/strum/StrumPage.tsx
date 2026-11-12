@@ -1,6 +1,7 @@
 "use client";
 
 import "@/components/library/library.css";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { FLAG_CODEC, useStoredState } from "@/components/useStoredState";
 import "./strum.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -170,231 +171,233 @@ export default function StrumPage({ shared }: { shared?: SharedStrum }) {
 	};
 
 	return (
-		<div className="st-page" data-m="strum">
-			<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
-				<div className="st-stage-wrap pb-area">
-					{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
-					{!isShared && folded && (
-						<button
-							type="button"
-							className="st-icon lib-fab"
-							onClick={() => fold(false)}
-							aria-label="Show the pattern list"
-							title="Show the pattern list"
-							aria-expanded={false}
-						>
-							<PanelRightOpen aria-hidden />
-						</button>
-					)}
-				<main className="st-stage">
-					{!session.patternRestored || !selectedPattern ? (
-						<div className="st-stage-in gp-rise" aria-busy="true" aria-label="Loading">
-							<div className="st-titlerow">
-								<div className="st-sk-title">
-									<Skeleton className="st-sk-meta" />
-									<Skeleton className="st-sk-name" />
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="st-page" data-m="strum">
+				<div className="lib-shell" data-lib={isShared ? "none" : folded ? "closed" : "open"}>
+					<div className="st-stage-wrap pb-area">
+						{/* Outside the scrolling stage, so it stays put however far the page scrolls. */}
+						{!isShared && folded && (
+							<button
+								type="button"
+								className="st-icon lib-fab"
+								onClick={() => fold(false)}
+								aria-label="Show the pattern list"
+								title="Show the pattern list"
+								aria-expanded={false}
+							>
+								<PanelRightOpen aria-hidden />
+							</button>
+						)}
+					<main className="st-stage">
+						{!session.patternRestored || !selectedPattern ? (
+							<div className="st-stage-in gp-rise" aria-busy="true" aria-label="Loading">
+								<div className="st-titlerow">
+									<div className="st-sk-title">
+										<Skeleton className="st-sk-meta" />
+										<Skeleton className="st-sk-name" />
+									</div>
+								</div>
+								<div className="st-sk-now">
+									<Skeleton />
+								</div>
+								<div className="st-prog-slot">
+									<div className="st-sk-prog">
+										<Skeleton className="st-sk-head" />
+										<Skeleton className="st-sk-row" />
+										<Skeleton className="st-sk-row" />
+									</div>
 								</div>
 							</div>
-							<div className="st-sk-now">
-								<Skeleton />
-							</div>
-							<div className="st-prog-slot">
-								<div className="st-sk-prog">
-									<Skeleton className="st-sk-head" />
-									<Skeleton className="st-sk-row" />
-									<Skeleton className="st-sk-row" />
-								</div>
-							</div>
-						</div>
-					) : pending ? (
-						<div className="st-stage-in gp-rise">
-							<div style={{ "--i": 0 } as CSSProperties}>
-								<PendingChords
-									bars={pending.bars}
-									capo={pending.capo}
-									pattern={pending.chosen ? selectedPattern : null}
-									meta={meta}
-									rhythm={rhythm}
-									meter={meter}
-									position={playback.rhythmPosition}
-									onOpenLibrary={() => setLibraryOpen(true)}
-									onNewPattern={() => openComposer("new")}
-									onConfirm={session.confirmPending}
-									onCancel={session.cancelPending}
-								/>
-							</div>
-						</div>
-					) : (
-						<div className="st-stage-in gp-rise">
-							<div style={{ "--i": 0 } as CSSProperties}>
-								<PatternHeader
-									name={selectedPattern.name}
-									meta={meta}
-									dirty={draft.dirty}
-									onRevert={draft.revert}
-									onSave={session.owned ? () => session.saveRhythm(draft.rhythm) : undefined}
-									onSaveAsNew={() => session.saveRhythmAsNew(draft.rhythm)}
-									owned={session.owned}
-									onEdit={isShared ? undefined : () => openComposer("edit")}
-									onDelete={isShared ? undefined : () => session.removePattern(selectedPattern.id)}
-									onShare={isShared ? undefined : shareState.share}
-									sharing={shareState.sharing}
-									onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
-									shared={
-										isShared
-											? {
-													onImport: shareState.importShared,
-													importing: shareState.importing,
-													disabled: loading || library.patternsLoading,
-												}
-											: undefined
-									}
-								/>
-								{isShared && <ShareNote guest={!loading && !user} />}
-							</div>
-							<div style={{ "--i": 1 } as CSSProperties}>
-								<NowCard
-									now={nowBar ? { label: barLabel(nowBar), diagram: chordBar !== null ? diagrams[chordBar] ?? null : null } : null}
-									next={nextBar ? barLabel(nextBar) : null}
-								>
-									<BeatPulse
-										beats={rhythm[playback.rhythmPosition?.bar ?? 0]?.length ?? 0}
-										ticksPerBeat={playback.ticksPerBeat}
-										active={playback.pulse}
-									/>
-									<RhythmGrid
+						) : pending ? (
+							<div className="st-stage-in gp-rise">
+								<div style={{ "--i": 0 } as CSSProperties}>
+									<PendingChords
+										bars={pending.bars}
+										capo={pending.capo}
+										pattern={pending.chosen ? selectedPattern : null}
+										meta={meta}
 										rhythm={rhythm}
 										meter={meter}
 										position={playback.rhythmPosition}
-										onToggle={isShared ? undefined : draft.toggle}
+										onOpenLibrary={() => setLibraryOpen(true)}
+										onNewPattern={() => openComposer("new")}
+										onConfirm={session.confirmPending}
+										onCancel={session.cancelPending}
 									/>
-								</NowCard>
+								</div>
 							</div>
-							<div className="st-prog-slot" style={{ "--i": 2 } as CSSProperties}>
-								<ProgressionPanel
-									patternName={selectedPattern.name}
-									progressions={session.patternProgressions}
-									draft={progressionDraft}
-									loading={!session.progressionsReady}
-									readOnly={isShared}
-									playingBar={playback.isPlaying ? playback.chordBar : null}
-									diagrams={diagrams}
-									userVoicings={userVoicings}
-									onSaveVoicing={saveVoicing}
-									onOpen={session.openProgressionById}
-									onCreate={(tokens, name) => session.addProgression(tokens, name)}
-									onSave={session.saveProgression}
-									onSaveAsNew={(progression) => {
-										progressionDraft.revert();
-										session.saveProgressionAsNew(progression);
-									}}
-									onDelete={session.removeProgression}
+						) : (
+							<div className="st-stage-in gp-rise">
+								<div style={{ "--i": 0 } as CSSProperties}>
+									<PatternHeader
+										name={selectedPattern.name}
+										meta={meta}
+										dirty={draft.dirty}
+										onRevert={draft.revert}
+										onSave={session.owned ? () => session.saveRhythm(draft.rhythm) : undefined}
+										onSaveAsNew={() => session.saveRhythmAsNew(draft.rhythm)}
+										owned={session.owned}
+										onEdit={isShared ? undefined : () => openComposer("edit")}
+										onDelete={isShared ? undefined : () => session.removePattern(selectedPattern.id)}
+										onShare={isShared ? undefined : shareState.share}
+										sharing={shareState.sharing}
+										onOpenLibrary={isShared ? undefined : () => setLibraryOpen(true)}
+										shared={
+											isShared
+												? {
+														onImport: shareState.importShared,
+														importing: shareState.importing,
+														disabled: loading || library.patternsLoading,
+													}
+												: undefined
+										}
+									/>
+									{isShared && <ShareNote guest={!loading && !user} />}
+								</div>
+								<div style={{ "--i": 1 } as CSSProperties}>
+									<NowCard
+										now={nowBar ? { label: barLabel(nowBar), diagram: chordBar !== null ? diagrams[chordBar] ?? null : null } : null}
+										next={nextBar ? barLabel(nextBar) : null}
+									>
+										<BeatPulse
+											beats={rhythm[playback.rhythmPosition?.bar ?? 0]?.length ?? 0}
+											ticksPerBeat={playback.ticksPerBeat}
+											active={playback.pulse}
+										/>
+										<RhythmGrid
+											rhythm={rhythm}
+											meter={meter}
+											position={playback.rhythmPosition}
+											onToggle={isShared ? undefined : draft.toggle}
+										/>
+									</NowCard>
+								</div>
+								<div className="st-prog-slot" style={{ "--i": 2 } as CSSProperties}>
+									<ProgressionPanel
+										patternName={selectedPattern.name}
+										progressions={session.patternProgressions}
+										draft={progressionDraft}
+										loading={!session.progressionsReady}
+										readOnly={isShared}
+										playingBar={playback.isPlaying ? playback.chordBar : null}
+										diagrams={diagrams}
+										userVoicings={userVoicings}
+										onSaveVoicing={saveVoicing}
+										onOpen={session.openProgressionById}
+										onCreate={(tokens, name) => session.addProgression(tokens, name)}
+										onSave={session.saveProgression}
+										onSaveAsNew={(progression) => {
+											progressionDraft.revert();
+											session.saveProgressionAsNew(progression);
+										}}
+										onDelete={session.removeProgression}
+									/>
+								</div>
+							</div>
+						)}
+					</main>
+					<PlayBar
+						module="strum"
+						pickRef={pickRef}
+						status={{
+							bar: playback.isPlaying ? playback.currBar + 1 : 1,
+							bars: playback.playBars.length,
+							now: nowBar ? barLabel(nowBar) : null,
+							next: nextBar ? barLabel(nextBar) : null,
+						}}
+						playing={playback.isPlaying}
+						preparing={playback.isPreparing}
+						canPlay={canPlay}
+						onTogglePlay={togglePlay}
+						countIn={{ setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining }}
+						tempo={{
+							bpm: session.bpm,
+							onBpm: session.setBpm,
+							meter,
+							defaultBpm: session.defaultBpm,
+							onSaveDefault: session.canSaveTempo ? session.saveDefaultTempo : undefined,
+						}}
+						tickLevel={playback.tickLevel}
+						onTickLevel={playback.setTickLevel}
+						loop={!playback.playOnce}
+						onLoop={(loop) => playback.setPlayOnce(!loop)}
+						loopGap={playback.loopGap}
+						onLoopGap={playback.setLoopGap}
+						dock={dock}
+						onDock={moveDock}
+						canDock={canDock}
+						soundKind="strum"
+						sound={{
+							enabled: playback.strumEnabled,
+							onEnabledChange: playback.setStrumEnabled,
+							gain: playback.strumGain,
+							onGainChange: playback.setStrumGain,
+							max: 2,
+						}}
+						click={{
+							enabled: playback.metronomeEnabled,
+							onEnabledChange: playback.setMetronomeEnabled,
+							gain: playback.metronomeGain,
+							onGainChange: playback.setMetronomeGain,
+							max: 1,
+						}}
+					/>
+					</div>
+
+					{!isShared && (
+						<aside ref={asideRef} className="lib-aside" aria-label="Pattern library">
+							{!folded && (
+								<PatternLibrary
+									{...libraryProps}
+									variant="aside"
+									onSelect={picking ? session.choosePendingPattern : session.selectPattern}
+									onFold={() => fold(true)}
 								/>
-							</div>
-						</div>
+							)}
+						</aside>
 					)}
-				</main>
-				<PlayBar
-					module="strum"
-					pickRef={pickRef}
-					status={{
-						bar: playback.isPlaying ? playback.currBar + 1 : 1,
-						bars: playback.playBars.length,
-						now: nowBar ? barLabel(nowBar) : null,
-						next: nextBar ? barLabel(nextBar) : null,
-					}}
-					playing={playback.isPlaying}
-					preparing={playback.isPreparing}
-					canPlay={canPlay}
-					onTogglePlay={togglePlay}
-					countIn={{ setting: countIn.setting, onSetting: countIn.onSetting, remaining: countIn.remaining }}
-					tempo={{
-						bpm: session.bpm,
-						onBpm: session.setBpm,
-						meter,
-						defaultBpm: session.defaultBpm,
-						onSaveDefault: session.canSaveTempo ? session.saveDefaultTempo : undefined,
-					}}
-					tickLevel={playback.tickLevel}
-					onTickLevel={playback.setTickLevel}
-					loop={!playback.playOnce}
-					onLoop={(loop) => playback.setPlayOnce(!loop)}
-					loopGap={playback.loopGap}
-					onLoopGap={playback.setLoopGap}
-					dock={dock}
-					onDock={moveDock}
-					canDock={canDock}
-					soundKind="strum"
-					sound={{
-						enabled: playback.strumEnabled,
-						onEnabledChange: playback.setStrumEnabled,
-						gain: playback.strumGain,
-						onGainChange: playback.setStrumGain,
-						max: 2,
-					}}
-					click={{
-						enabled: playback.metronomeEnabled,
-						onEnabledChange: playback.setMetronomeEnabled,
-						gain: playback.metronomeGain,
-						onGainChange: playback.setMetronomeGain,
-						max: 1,
-					}}
-				/>
+
 				</div>
 
 				{!isShared && (
-					<aside ref={asideRef} className="lib-aside" aria-label="Pattern library">
-						{!folded && (
+					<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title={picking ? "Choose a pattern" : "Patterns"} fixedHeight>
+						<div className="flex min-h-0 flex-col gap-3" data-m="strum">
 							<PatternLibrary
 								{...libraryProps}
-								variant="aside"
-								onSelect={picking ? session.choosePendingPattern : session.selectPattern}
-								onFold={() => fold(true)}
+								variant="sheet"
+								onSelect={(pattern) => {
+									if (picking) session.choosePendingPattern(pattern);
+									else session.selectPattern(pattern);
+									setLibraryOpen(false);
+								}}
 							/>
-						)}
-					</aside>
+						</div>
+					</Sheet>
 				)}
-
+				{!isShared && composer !== null && (
+					<PatternComposer
+						editing={composer === "edit" && selectedPattern ? selectedPattern : undefined}
+						existingPatterns={session.allPatterns}
+						user={user}
+						onClose={() => setComposer(null)}
+						onSave={(pattern) => {
+							if (composer === "edit") session.savePattern(pattern);
+							else if (picking) session.createPendingPattern(pattern);
+							else session.createPattern(pattern);
+						}}
+					/>
+				)}
+				{shareState.dialogOpen && selectedPattern && (
+					<ShareStrumDialog
+						open
+						onClose={shareState.closeDialog}
+						patternName={selectedPattern.name}
+						progressions={session.patternProgressions}
+						openId={openProgression?.id ?? null}
+						onShare={(chosen) => void shareState.shareWith(chosen)}
+					/>
+				)}
 			</div>
-
-			{!isShared && (
-				<Sheet open={libraryOpen} onOpenChange={setLibraryOpen} title={picking ? "Choose a pattern" : "Patterns"} fixedHeight>
-					<div className="flex min-h-0 flex-col gap-3" data-m="strum">
-						<PatternLibrary
-							{...libraryProps}
-							variant="sheet"
-							onSelect={(pattern) => {
-								if (picking) session.choosePendingPattern(pattern);
-								else session.selectPattern(pattern);
-								setLibraryOpen(false);
-							}}
-						/>
-					</div>
-				</Sheet>
-			)}
-			{!isShared && composer !== null && (
-				<PatternComposer
-					editing={composer === "edit" && selectedPattern ? selectedPattern : undefined}
-					existingPatterns={session.allPatterns}
-					user={user}
-					onClose={() => setComposer(null)}
-					onSave={(pattern) => {
-						if (composer === "edit") session.savePattern(pattern);
-						else if (picking) session.createPendingPattern(pattern);
-						else session.createPattern(pattern);
-					}}
-				/>
-			)}
-			{shareState.dialogOpen && selectedPattern && (
-				<ShareStrumDialog
-					open
-					onClose={shareState.closeDialog}
-					patternName={selectedPattern.name}
-					progressions={session.patternProgressions}
-					openId={openProgression?.id ?? null}
-					onShare={(chosen) => void shareState.shareWith(chosen)}
-				/>
-			)}
-		</div>
+		</WriteGateProvider>
 	);
 }

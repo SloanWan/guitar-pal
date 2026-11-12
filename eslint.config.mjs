@@ -49,6 +49,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Claude Code's git worktrees: another checkout of this repo, linted there.
+    ".claude/**",
   ]),
 ]);
 

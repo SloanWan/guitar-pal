@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { refuseOfflineWrite } from "@/lib/offline/writes";
+import { useLibraryCopy } from "@/hooks/useLibraryCopy";
 import type { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { isFavourite as listHas, mergeFavourites, toggleFavourite, type FavouriteChord } from "@/lib/favouriteChords";
@@ -66,6 +68,7 @@ export function useFavouriteChords(user: User | null, loading: boolean) {
 	/** Keep the chord, or let it go. A write the account refuses is undone on screen. */
 	const toggle = useCallback(
 		(root: string, suffix: string) => {
+			if (refuseOfflineWrite(user)) return;
 			const adding = !listHas(favourites, root, suffix);
 			const next = toggleFavourite(favourites, root, suffix);
 			setFavourites(next);
@@ -82,6 +85,9 @@ export function useFavouriteChords(user: User | null, loading: boolean) {
 		},
 		[user, favourites],
 	);
+
+	// This device's copy, kept in step with the page's writes (#469).
+	useLibraryCopy("favouriteChords", userId, favourites, !favouritesLoading);
 
 	return { favourites, favouritesLoading, isFavourite, toggle };
 }

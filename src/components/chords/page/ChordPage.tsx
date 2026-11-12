@@ -1,6 +1,9 @@
 "use client";
 
 import "./chord-page.css";
+import { useOnline } from "@/hooks/useOnline";
+import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
+import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AudioLines, ChevronLeft, ChevronRight, Library, PanelRightOpen, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import Link from "@/components/AppLink";
@@ -60,6 +63,9 @@ export interface ChordPageProps {
  */
 export default function ChordPage({ root, suffix, tones, slashBass, library, index, rootChords }: ChordPageProps) {
 	const { user, loading } = useUser();
+	// The page provides the write gate, so it asks the same question itself (#469).
+	const offlineBlocked = writesBlocked(user, useOnline());
+	const offlineReason = offlineBlocked ? OFFLINE_WRITE_REASON : undefined;
 	const { voicings: userVoicings, saveVoicing, deleteVoicing } = useUserChordVoicings(user, loading);
 	const favourites = useFavouriteChords(user, loading);
 	useRecordVisit(user, "chord", chordVisitTarget(root, suffix));
@@ -137,7 +143,8 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 		setSheetOpen(false);
 	}
 	function saveDraft() {
-		if (!draft) return;
+		// Kept open offline, so the drawing is not lost (#469).
+		if (!draft || refuseOfflineWrite(user)) return;
 		const own = draft.editingId ? mine.find((v) => v.id === draft.editingId) : undefined;
 		const stored = saveVoicing({
 			...chordShapeToVoicing(draft.shape, draft.editingId ?? userVoicingId(crypto.randomUUID()), draft.name.trim() || null),
@@ -167,263 +174,273 @@ export default function ChordPage({ root, suffix, tones, slashBass, library, ind
 	const omitted = new Set(shape?.omits ?? []);
 
 	return (
-		<div className="ch-page" ref={layoutRef}>
-			<div className="ch-shell" data-lib={folded ? "closed" : "open"}>
-				<div className="ch-stage-wrap">
-					{folded && (
-						<button
-							type="button"
-							className="ch-icon ch-lib-fab gp-focus"
-							onClick={() => fold(false)}
-							aria-label="Show the chord library"
-							title="Show the chord library"
-							aria-expanded={false}
-						>
-							<PanelRightOpen aria-hidden />
-						</button>
-					)}
-					<div className="ch-stage">
-						<div className="ch-stage-in gp-rise">
-							<nav className="ch-crumbs" aria-label="Breadcrumb" style={{ "--i": 0 } as CSSProperties}>
-								<Button asChild variant="ghost" size="xs" className="ch-back">
-									<Link href="/chords">
-										<ChevronLeft aria-hidden />
-										Chords
-									</Link>
-								</Button>
-								{root !== UNKNOWN_ROOT && <span className="ch-lab">/ {withGlyphs(root)}</span>}
-								<span className="flex-1" />
-								<Button variant="secondary" size="xs" className="ch-libbtn" onClick={() => setSheetOpen(true)}>
-									<Library aria-hidden />
-									Library
-								</Button>
-							</nav>
-
-							<header className="ch-title" style={{ "--i": 0 } as CSSProperties}>
-								<span className="ch-lab">
-									{category}
-									{root !== UNKNOWN_ROOT && ` · ${withGlyphs(root)} root`}
-								</span>
-								<div className="ch-title-row">
-									<h1>{withGlyphs(symbol)}</h1>
-									<PickToggle
-										className="ch-fav"
-										pressed={favourites.isFavourite(root, suffix)}
-										onPressedChange={() => favourites.toggle(root, suffix)}
-										label={`Favourite ${withGlyphs(symbol)}`}
-									/>
-								</div>
-								<span className="ch-meta">
-									{chordQualityLine(root, suffix)} · {shapes.length} shape{shapes.length === 1 ? "" : "s"}
-								</span>
-							</header>
-
-							{shape ? (
-								<section className="ch-main" aria-label={`${symbol}, ${shape.label}`} style={{ "--i": 1 } as CSSProperties}>
-									{tones && (
-										<ol className="ch-tones" aria-label="Chord tones">
-											{tones.map((tone, i) => (
-												<li
-													key={tone.semitones}
-													className="ch-tone"
-													data-root={i === 0 ? "" : undefined}
-													data-gone={omitted.has(tone.degree === "1" ? "root" : tone.degree) ? "" : undefined}
-												>
-													<b>{tone.note}</b>
-													<span className="ch-dgr">{tone.degree}</span>
-													<span className="ch-dname">{degreeName(tone.degree)}</span>
-												</li>
-											))}
-											{slashBass && <li className="ch-meta ch-bass">over {withGlyphs(slashBass)} in the bass</li>}
-										</ol>
-									)}
-									<div className="ch-center">
-										<Button variant="icon" size="sm" aria-label="Previous shape" disabled={at === 0} onClick={() => select(at - 1)}>
+		<WriteGateProvider signedIn={user !== null}>
+			<div className="ch-page" ref={layoutRef}>
+				<div className="ch-shell" data-lib={folded ? "closed" : "open"}>
+					<div className="ch-stage-wrap">
+						{folded && (
+							<button
+								type="button"
+								className="ch-icon ch-lib-fab gp-focus"
+								onClick={() => fold(false)}
+								aria-label="Show the chord library"
+								title="Show the chord library"
+								aria-expanded={false}
+							>
+								<PanelRightOpen aria-hidden />
+							</button>
+						)}
+						<div className="ch-stage">
+							<div className="ch-stage-in gp-rise">
+								<nav className="ch-crumbs" aria-label="Breadcrumb" style={{ "--i": 0 } as CSSProperties}>
+									<Button asChild variant="ghost" size="xs" className="ch-back">
+										<Link href="/chords">
 											<ChevronLeft aria-hidden />
-										</Button>
-										<span className="ch-big" role="img" aria-label={`${symbol}, ${shape.label}`}>
-											<ChordDiagramSVG
-												{...shape.def}
-												mode={mode}
-												rootMidi={rootMidi}
-												rootTone
-												size="large"
-												pluck={
-													preview.playing !== null && soundingOf === shape.id
-														? { run: preview.run, gapS: preview.playing === "arpeggio" ? ARPEGGIO_GAP_S : 0 }
-														: null
-												}
-											/>
-										</span>
-										<Button
-											variant="icon"
-											size="sm"
-											aria-label="Next shape"
-											disabled={at === shapes.length - 1}
-											onClick={() => select(at + 1)}
-										>
-											<ChevronRight aria-hidden />
-										</Button>
-									</div>
-									<div className="ch-side">
-										<div className="flex flex-col gap-0.5">
-											<span className="ch-vlabel">{shape.label}</span>
-											<span className="ch-meta">
-												Shape {at + 1} of {shapes.length}
-											</span>
-											{shape.caption && <span className="ch-meta">{shape.caption}</span>}
-											{shape.note && <span className="ch-note-line">{shape.note}</span>}
-											<span className="ch-tab">{shape.tab}</span>
-										</div>
-										{/* Labels that never change, so neither button moves while samples load or a chord rings. */}
-										<div className="ch-plays">
-											<Button
-												onClick={() => {
-													setSoundingOf(shape.id);
-													void preview.play(shape.pitches);
-												}}
-												loading={preview.isPreloading}
-												aria-pressed={preview.playing === "strum"}
-											>
-												<Play aria-hidden />
-												Play
-											</Button>
-											<Button
-												variant="secondary"
-												onClick={() => {
-													setSoundingOf(shape.id);
-													void preview.arpeggiate(shape.pitches);
-												}}
-												loading={preview.isPreloading}
-												aria-pressed={preview.playing === "arpeggio"}
-											>
-												<AudioLines aria-hidden />
-												Arpeggio
-											</Button>
-										</div>
-										{shape.mine &&
-											(confirmDelete ? (
-												<div className="flex items-center gap-1.5">
-													<span className="ch-meta">Delete it?</span>
-													<Button
-														variant="danger"
-														size="xs"
-														onClick={() => {
-															deleteVoicing(shape.id);
-															setSelectedId(null);
-															setConfirmDelete(false);
-														}}
-													>
-														Delete
-													</Button>
-													<Button variant="ghost" size="xs" onClick={() => setConfirmDelete(false)}>
-														Keep
-													</Button>
-												</div>
-											) : (
-												<div className="flex items-center gap-1">
-													<Button variant="ghost" size="xs" onClick={() => openDraft(true)}>
-														<Pencil aria-hidden />
-														Redraw
-													</Button>
-													<Button variant="ghost" size="xs" onClick={() => setConfirmDelete(true)} aria-label={`Delete ${shape.label}`}>
-														<Trash2 aria-hidden />
-														Delete
-													</Button>
-												</div>
-											))}
-										<div className="flex flex-col gap-1">
-											<span className="ch-lab">Dots show</span>
-											<Segmented options={DOT_MODES} value={mode} onChange={setMode} label="What the dots show" dense />
-										</div>
-									</div>
-								</section>
-							) : (
-								<section className="ch-empty" style={{ "--i": 1 } as CSSProperties}>
-									<p className="m-0">
-										The library has no shape for {withGlyphs(symbol)}. Draw your own and it plays like any other.
-									</p>
-									<Button variant="secondary" onClick={() => openDraft(false)}>
-										<Plus aria-hidden />
-										Draw a shape
+											Chords
+										</Link>
 									</Button>
-								</section>
-							)}
+									{root !== UNKNOWN_ROOT && <span className="ch-lab">/ {withGlyphs(root)}</span>}
+									<span className="flex-1" />
+									<Button variant="secondary" size="xs" className="ch-libbtn" onClick={() => setSheetOpen(true)}>
+										<Library aria-hidden />
+										Library
+									</Button>
+								</nav>
 
-							{shapes.length > 0 && (
-								<section className="ch-shapes" aria-label="Every shape" style={{ "--i": 2 } as CSSProperties}>
-									<div className="ch-shapes-head">
-										<h2>Shapes</h2>
-										<button
-											type="button"
-											className="ch-icon ch-add gp-focus"
-											onClick={() => openDraft(false)}
-											aria-label="Draw my own shape"
-											title="Draw my own shape"
-										>
-											<Plus aria-hidden />
-										</button>
-										<span className="ch-meta">{mine.length > 0 ? "yours sit at the end" : "the library's, standard first"}</span>
+								<header className="ch-title" style={{ "--i": 0 } as CSSProperties}>
+									<span className="ch-lab">
+										{category}
+										{root !== UNKNOWN_ROOT && ` · ${withGlyphs(root)} root`}
+									</span>
+									<div className="ch-title-row">
+										<h1>{withGlyphs(symbol)}</h1>
+										<PickToggle
+											className="ch-fav"
+											pressed={favourites.isFavourite(root, suffix)}
+											onPressedChange={() => favourites.toggle(root, suffix)}
+											label={`Favourite ${withGlyphs(symbol)}`}
+										/>
 									</div>
-									<div className="ch-film">
-										{shapes.map((s, i) => (
-											<button
-												key={s.id}
-												type="button"
-												className="ch-shape gp-focus"
-												aria-pressed={i === at}
-												aria-label={`Shape ${i + 1}: ${s.label}`}
-												onClick={() => select(i)}
+									<span className="ch-meta">
+										{chordQualityLine(root, suffix)} · {shapes.length} shape{shapes.length === 1 ? "" : "s"}
+									</span>
+								</header>
+
+								{shape ? (
+									<section className="ch-main" aria-label={`${symbol}, ${shape.label}`} style={{ "--i": 1 } as CSSProperties}>
+										{tones && (
+											<ol className="ch-tones" aria-label="Chord tones">
+												{tones.map((tone, i) => (
+													<li
+														key={tone.semitones}
+														className="ch-tone"
+														data-root={i === 0 ? "" : undefined}
+														data-gone={omitted.has(tone.degree === "1" ? "root" : tone.degree) ? "" : undefined}
+													>
+														<b>{tone.note}</b>
+														<span className="ch-dgr">{tone.degree}</span>
+														<span className="ch-dname">{degreeName(tone.degree)}</span>
+													</li>
+												))}
+												{slashBass && <li className="ch-meta ch-bass">over {withGlyphs(slashBass)} in the bass</li>}
+											</ol>
+										)}
+										<div className="ch-center">
+											<Button variant="icon" size="sm" aria-label="Previous shape" disabled={at === 0} onClick={() => select(at - 1)}>
+												<ChevronLeft aria-hidden />
+											</Button>
+											<span className="ch-big" role="img" aria-label={`${symbol}, ${shape.label}`}>
+												<ChordDiagramSVG
+													{...shape.def}
+													mode={mode}
+													rootMidi={rootMidi}
+													rootTone
+													size="large"
+													pluck={
+														preview.playing !== null && soundingOf === shape.id
+															? { run: preview.run, gapS: preview.playing === "arpeggio" ? ARPEGGIO_GAP_S : 0 }
+															: null
+													}
+												/>
+											</span>
+											<Button
+												variant="icon"
+												size="sm"
+												aria-label="Next shape"
+												disabled={at === shapes.length - 1}
+												onClick={() => select(at + 1)}
 											>
-												<span className="ch-shape-dg" aria-hidden>
-													<ChordDiagramSVG {...s.def} rootMidi={rootMidi} rootTone size="compact" />
+												<ChevronRight aria-hidden />
+											</Button>
+										</div>
+										<div className="ch-side">
+											<div className="flex flex-col gap-0.5">
+												<span className="ch-vlabel">{shape.label}</span>
+												<span className="ch-meta">
+													Shape {at + 1} of {shapes.length}
 												</span>
-												<span className="ch-shape-label gp-title">{s.label}</span>
-												{s.mine && <span className="ch-chip">Mine</span>}
+												{shape.caption && <span className="ch-meta">{shape.caption}</span>}
+												{shape.note && <span className="ch-note-line">{shape.note}</span>}
+												<span className="ch-tab">{shape.tab}</span>
+											</div>
+											{/* Labels that never change, so neither button moves while samples load or a chord rings. */}
+											<div className="ch-plays">
+												<Button
+													onClick={() => {
+														setSoundingOf(shape.id);
+														void preview.play(shape.pitches);
+													}}
+													loading={preview.isPreloading}
+													aria-pressed={preview.playing === "strum"}
+												>
+													<Play aria-hidden />
+													Play
+												</Button>
+												<Button
+													variant="secondary"
+													onClick={() => {
+														setSoundingOf(shape.id);
+														void preview.arpeggiate(shape.pitches);
+													}}
+													loading={preview.isPreloading}
+													aria-pressed={preview.playing === "arpeggio"}
+												>
+													<AudioLines aria-hidden />
+													Arpeggio
+												</Button>
+											</div>
+											{shape.mine &&
+												(confirmDelete ? (
+													<div className="flex items-center gap-1.5">
+														<span className="ch-meta">Delete it?</span>
+														<Button
+															variant="danger"
+															size="xs"
+															onClick={() => {
+																deleteVoicing(shape.id);
+																setSelectedId(null);
+																setConfirmDelete(false);
+															}}
+														>
+															Delete
+														</Button>
+														<Button variant="ghost" size="xs" onClick={() => setConfirmDelete(false)}>
+															Keep
+														</Button>
+													</div>
+												) : (
+													<div className="flex items-center gap-1">
+														<Button variant="ghost" size="xs" onClick={() => openDraft(true)} disabled={offlineBlocked} title={offlineReason}>
+															<Pencil aria-hidden />
+															Redraw
+														</Button>
+														<Button
+															variant="ghost"
+															size="xs"
+															onClick={() => setConfirmDelete(true)}
+															disabled={offlineBlocked}
+															title={offlineReason}
+															aria-label={`Delete ${shape.label}`}
+														>
+															<Trash2 aria-hidden />
+															Delete
+														</Button>
+													</div>
+												))}
+											<div className="flex flex-col gap-1">
+												<span className="ch-lab">Dots show</span>
+												<Segmented options={DOT_MODES} value={mode} onChange={setMode} label="What the dots show" dense />
+											</div>
+										</div>
+									</section>
+								) : (
+									<section className="ch-empty" style={{ "--i": 1 } as CSSProperties}>
+										<p className="m-0">
+											The library has no shape for {withGlyphs(symbol)}. Draw your own and it plays like any other.
+										</p>
+										<Button variant="secondary" onClick={() => openDraft(false)} disabled={offlineBlocked} title={offlineReason}>
+											<Plus aria-hidden />
+											Draw a shape
+										</Button>
+									</section>
+								)}
+
+								{shapes.length > 0 && (
+									<section className="ch-shapes" aria-label="Every shape" style={{ "--i": 2 } as CSSProperties}>
+										<div className="ch-shapes-head">
+											<h2>Shapes</h2>
+											<button
+												type="button"
+												className="ch-icon ch-add gp-focus"
+												onClick={() => openDraft(false)}
+												disabled={offlineBlocked}
+												aria-label="Draw my own shape"
+												title={offlineReason ?? "Draw my own shape"}
+											>
+												<Plus aria-hidden />
 											</button>
-										))}
-									</div>
-								</section>
-							)}
+											<span className="ch-meta">{mine.length > 0 ? "yours sit at the end" : "the library's, standard first"}</span>
+										</div>
+										<div className="ch-film">
+											{shapes.map((s, i) => (
+												<button
+													key={s.id}
+													type="button"
+													className="ch-shape gp-focus"
+													aria-pressed={i === at}
+													aria-label={`Shape ${i + 1}: ${s.label}`}
+													onClick={() => select(i)}
+												>
+													<span className="ch-shape-dg" aria-hidden>
+														<ChordDiagramSVG {...s.def} rootMidi={rootMidi} rootTone size="compact" />
+													</span>
+													<span className="ch-shape-label gp-title">{s.label}</span>
+													{s.mine && <span className="ch-chip">Mine</span>}
+												</button>
+											))}
+										</div>
+									</section>
+								)}
 
-							{shape && (
-								<section className="ch-neck-wrap" aria-label="On the neck" style={{ "--i": 3 } as CSSProperties}>
-									<div className="ch-shapes-head">
-										<h2>On the neck</h2>
-										<span className="ch-meta">every tone up to the 15th fret · the box is this shape</span>
-									</div>
-									<ChordNeck symbol={withGlyphs(symbol)} rootPc={rootMidi ?? -1} tones={tones} shapes={shapes} at={at} onSelect={select} />
-								</section>
-							)}
+								{shape && (
+									<section className="ch-neck-wrap" aria-label="On the neck" style={{ "--i": 3 } as CSSProperties}>
+										<div className="ch-shapes-head">
+											<h2>On the neck</h2>
+											<span className="ch-meta">every tone up to the 15th fret · the box is this shape</span>
+										</div>
+										<ChordNeck symbol={withGlyphs(symbol)} rootPc={rootMidi ?? -1} tones={tones} shapes={shapes} at={at} onSelect={select} />
+									</section>
+								)}
 
-							<p className="ch-credit" style={{ "--i": 4 } as CSSProperties}>
-								Voicing data via{" "}
-								<a href="https://github.com/tombatossals/chords-db" target="_blank" rel="noopener noreferrer">
-									tombatossals/chords-db
-								</a>{" "}
-								· audio samples via{" "}
-								<a href="https://github.com/surikov/webaudiofontdata" target="_blank" rel="noopener noreferrer">
-									WebAudioFont
-								</a>
-							</p>
+								<p className="ch-credit" style={{ "--i": 4 } as CSSProperties}>
+									Voicing data via{" "}
+									<a href="https://github.com/tombatossals/chords-db" target="_blank" rel="noopener noreferrer">
+										tombatossals/chords-db
+									</a>{" "}
+									· audio samples via{" "}
+									<a href="https://github.com/surikov/webaudiofontdata" target="_blank" rel="noopener noreferrer">
+										WebAudioFont
+									</a>
+								</p>
+							</div>
 						</div>
 					</div>
+
+					<aside className="ch-lib" aria-label={draft ? "My own shape" : "Chord library"}>
+						{!folded && (drawer("aside") ?? <ChordLibrary {...libraryProps} variant="aside" onFold={() => fold(true)} />)}
+					</aside>
 				</div>
 
-				<aside className="ch-lib" aria-label={draft ? "My own shape" : "Chord library"}>
-					{!folded && (drawer("aside") ?? <ChordLibrary {...libraryProps} variant="aside" onFold={() => fold(true)} />)}
-				</aside>
+				<Sheet
+					open={sheetOpen}
+					onOpenChange={(open) => (open ? setSheetOpen(true) : closeDraft())}
+					title={draft ? `${draftTitle(draft)} · ${withGlyphs(symbol)}` : "Chord library"}
+				>
+					<div className="ch-sheet" data-m="chords">
+						{drawer("sheet") ?? <ChordLibrary {...libraryProps} variant="sheet" onNavigate={() => setSheetOpen(false)} />}
+					</div>
+				</Sheet>
 			</div>
-
-			<Sheet
-				open={sheetOpen}
-				onOpenChange={(open) => (open ? setSheetOpen(true) : closeDraft())}
-				title={draft ? `${draftTitle(draft)} · ${withGlyphs(symbol)}` : "Chord library"}
-			>
-				<div className="ch-sheet" data-m="chords">
-					{drawer("sheet") ?? <ChordLibrary {...libraryProps} variant="sheet" onNavigate={() => setSheetOpen(false)} />}
-				</div>
-			</Sheet>
-		</div>
+		</WriteGateProvider>
 	);
 }

@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
+import { refuseOfflineWrite } from "@/lib/offline/writes";
+import { useLibraryCopy } from "@/hooks/useLibraryCopy";
 import type { StrumPattern } from "@/lib/strumPatterns";
 import { patternBpm, patternMeter, sortPatternsByNewest } from "@/lib/strumBars";
 import { patternRhythm, withRhythm } from "@/lib/strumRhythm";
 import {
+	fetchAccountFavouritePatternIds,
+	fetchAccountPatterns,
 	migrateGuestStrumStorage,
 	patternColumns,
-	patternFromRow,
 	STRUM_PATTERNS_STORAGE_KEY,
-	type StrumPatternRow,
 } from "@/lib/strumStorage";
 import { createClient } from "@/lib/supabase";
 import { getUser } from "@/lib/auth";
@@ -46,13 +48,7 @@ export async function fetchCustomPatterns(user?: User | null): Promise<StrumPatt
 		}
 	}
 	try {
-		const supabase = createClient();
-		const { data } = await supabase
-			.from("user_strum_patterns")
-			.select("*")
-			.eq("user_id", account.id)
-			.order("created_at", { ascending: false });
-		return (data ?? []).map((row) => patternFromRow(row as StrumPatternRow));
+		return await fetchAccountPatterns(createClient(), account.id);
 	} catch (e) {
 		console.error("[assistant] reading patterns:", e);
 		return [];
@@ -107,16 +103,19 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 					const localPatterns = sanitizeStoredPatterns(
 						JSON.parse(savedPatterns) as StrumPattern[],
 					);
-					const { data: existing } = await supabase
+					const { data: existing, error: readError } = await supabase
 						.from("user_strum_patterns")
 						.select("pattern_id")
 						.eq("user_id", currentUserId);
+					// Unread or unwritten (offline, say), the browser's patterns are kept for
+					// the next load rather than dropped.
+					if (readError) throw new Error(readError.message);
 					const existingIds = new Set(
 						(existing ?? []).map((r) => r.pattern_id as string),
 					);
 					const toInsert = localPatterns.filter((p) => !existingIds.has(p.id));
 					if (toInsert.length > 0) {
-						await supabase.from("user_strum_patterns").insert(
+						const { error: insertError } = await supabase.from("user_strum_patterns").insert(
 							toInsert.map((p) => ({
 								user_id: currentUserId,
 								pattern_id: p.id,
@@ -127,6 +126,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 								...(p.createdAt ? { created_at: p.createdAt } : {}),
 							})),
 						);
+						if (insertError) throw new Error(insertError.message);
 						merged = true;
 					}
 					localStorage.removeItem(STRUM_PATTERNS_STORAGE_KEY);
@@ -139,18 +139,20 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			if (savedFavs) {
 				try {
 					const localFavIds = JSON.parse(savedFavs) as string[];
-					const { data: existingFavs } = await supabase
+					const { data: existingFavs, error: favsReadError } = await supabase
 						.from("user_favourite_patterns")
 						.select("pattern_id")
 						.eq("user_id", currentUserId);
+					if (favsReadError) throw new Error(favsReadError.message);
 					const existingFavIds = new Set(
 						(existingFavs ?? []).map((r) => r.pattern_id as string),
 					);
 					const toInsertFavs = localFavIds.filter((id) => !existingFavIds.has(id));
 					if (toInsertFavs.length > 0) {
-						await supabase.from("user_favourite_patterns").insert(
+						const { error: favsInsertError } = await supabase.from("user_favourite_patterns").insert(
 							toInsertFavs.map((id) => ({ user_id: currentUserId, pattern_id: id })),
 						);
+						if (favsInsertError) throw new Error(favsInsertError.message);
 						merged = true;
 					}
 					localStorage.removeItem("favouritePatternIds");
@@ -159,24 +161,18 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 				}
 			}
 
-			const { data: patterns } = await supabase
-				.from("user_strum_patterns")
-				.select("*")
-				.eq("user_id", currentUserId)
-				// Newest first: the pattern someone just made is the one they are
-				// working on, and the database is the only place the creation time
-				// is recorded.
-				.order("created_at", { ascending: false });
-			setCustomPatterns(
-				(patterns ?? []).map((row) => patternFromRow(row as StrumPatternRow)),
-			);
+			try {
+				setCustomPatterns(await fetchAccountPatterns(supabase, currentUserId));
+			} catch (e) {
+				console.error("[useStrumPatterns] load failed:", e);
+			}
 			setPatternsLoading(false);
 
-			const { data: favs } = await supabase
-				.from("user_favourite_patterns")
-				.select("pattern_id")
-				.eq("user_id", currentUserId);
-			setFavouriteIds((favs ?? []).map((r) => r.pattern_id as string));
+			try {
+				setFavouriteIds(await fetchAccountFavouritePatternIds(supabase, currentUserId));
+			} catch (e) {
+				console.error("[useStrumPatterns] favourites failed:", e);
+			}
 
 			if (merged) {
 				toast("Your patterns and favourites have been synced to your account.");
@@ -187,6 +183,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 	}, [userId]);
 
 	function handleSaveCustomPattern(pattern: StrumPattern) {
+		if (refuseOfflineWrite(user)) return;
 		if (user) {
 			setPatternsLoading(true);
 			(async () => {
@@ -198,14 +195,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 						...patternColumns(pattern),
 					});
 					if (error) throw new Error(error.message);
-					const { data: patterns } = await supabase
-						.from("user_strum_patterns")
-						.select("*")
-						.eq("user_id", user.id)
-						.order("created_at", { ascending: false });
-					setCustomPatterns(
-						(patterns ?? []).map((row) => patternFromRow(row as StrumPatternRow)),
-					);
+					setCustomPatterns(await fetchAccountPatterns(supabase, user.id));
 					setPatternsLoading(false);
 				} catch (e) {
 					console.error(e);
@@ -226,6 +216,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 	}
 
 	function handleEditCustomPattern(updated: StrumPattern) {
+		if (refuseOfflineWrite(user)) return;
 		// Editing is not creating: the pattern keeps the time it was made, and
 		// therefore its place in the list.
 		const next = customPatterns.map((p) =>
@@ -252,6 +243,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 	}
 
 	function handleDeleteCustomPattern(id: string) {
+		if (refuseOfflineWrite(user)) return;
 		const updated = customPatterns.filter((p) => p.id !== id);
 		setCustomPatterns(updated);
 		localStorage.setItem(STRUM_PATTERNS_STORAGE_KEY, JSON.stringify(updated));
@@ -291,6 +283,7 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 	}
 
 	function handleToggleFavourite(patternId: string) {
+		if (refuseOfflineWrite(user)) return;
 		const isFav = favouriteIds.includes(patternId);
 		const updated = isFav
 			? favouriteIds.filter((id) => id !== patternId)
@@ -320,6 +313,10 @@ export function useStrumPatterns(user: User | null, loading: boolean) {
 			})();
 		}
 	}
+
+	// This device's copy, kept in step with the page's writes (#469).
+	useLibraryCopy("strumPatterns", userId, customPatterns, !patternsLoading);
+	useLibraryCopy("strumFavourites", userId, favouriteIds, !patternsLoading);
 
 	return {
 		customPatterns,

@@ -305,6 +305,28 @@ export function typeDigit(
 	return { fret: digit, pending: digit * 10 <= MAX_FRET && digit > 0 ? { cell, digit, at: now } : null };
 }
 
+/** What a touch screen's fret box holds (#479), read the way typed digits are. */
+export interface FretEntry {
+	/** What the box shows: at most two digits, never a fret past the neck. */
+	text: string;
+	fret: number | null;
+	/** Whether the entry is a whole fret, or a 1 or a 2 that may take a second digit. */
+	done: boolean;
+}
+
+/**
+ * The fret box's text as a fret, by `typeDigit`'s rule: a 0 or a 3–9 is a whole
+ * fret, a 1 or a 2 waits for a second digit, and a second digit that would pass
+ * the neck ("25") is dropped. Anything but digits is ignored.
+ */
+export function readFretEntry(raw: string): FretEntry {
+	let text = raw.replace(/\D/g, "").slice(0, 2);
+	if (text.length === 2 && Number(text) > MAX_FRET) text = text.slice(0, 1);
+	if (text === "") return { text, fret: null, done: false };
+	const fret = Number(text);
+	return { text, fret, done: text.length === 2 || fret === 0 || fret * 10 > MAX_FRET };
+}
+
 // ── Keys ─────────────────────────────────────────────────────────────────────
 
 export type EditorKeyAction =

@@ -434,7 +434,39 @@
 	/* ── The tab as a grid of bar blocks (#362) ──────────────────────────── */
 	/* The grid takes the keys; its focus ring is the cursor's cell, not a box. */
 	.te-sheet {
+		position: relative;
 		outline: none;
+	}
+	/* A touch screen's fret box (#479): laid over the cursor's cell, hidden until a tap opens it. */
+	.te-touch-fret {
+		position: absolute;
+		top: 0;
+		left: 0;
+		z-index: 3;
+		width: 0;
+		height: 0;
+		margin: 0;
+		padding: 0;
+		border: 2px solid var(--gp-m-500);
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-card);
+		color: var(--gp-ink);
+		caret-color: var(--gp-m-500);
+		font-family: var(--gp-f-num);
+		/* 16px: iOS would zoom into anything smaller. */
+		font-size: 16px;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		text-align: center;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.te-touch-fret[data-open] {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.te-touch-fret::placeholder {
+		color: var(--gp-ink-3);
 	}
 	.te-grid {
 		display: grid;

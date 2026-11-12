@@ -2,6 +2,8 @@
 
 import "@/components/fingerpick/reader/tab.css";
 import { useOnline } from "@/hooks/useOnline";
+import { useCoarsePointer } from "@/hooks/useCoarsePointer";
+import TouchFretInput, { type TouchFretControl } from "./TouchFretInput";
 import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
 import "@/components/playback/icons.css";
@@ -211,11 +213,17 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const narrow = useMediaQuery("(max-width: 959px)", false);
 	const [toolsOpen, setToolsOpen] = useState(false);
 	const [toolsTab, setToolsTab] = useState<InspectorTab>("note");
+	// A touch screen has no keys to type a fret with, whatever its width: a tap on a cell opens a
+	// fret box over it instead (#479), and auto-advance starts on, as on a phone.
+	const touch = useCoarsePointer();
+	const fretBoxRef = useRef<HTMLInputElement>(null);
+	const fretBox = useRef<TouchFretControl>(null);
+	const [fretBoxOpen, setFretBoxOpen] = useState(false);
 	function togglePlay(from: SlotTarget) {
 		if (playback.isPlaying) playback.stop();
 		else playback.playFrom(from);
 	}
-	const autoAdvance = autoAdvanceOn(prefs.autoAdvance, phone);
+	const autoAdvance = autoAdvanceOn(prefs.autoAdvance, phone || touch);
 	const tabCursor = useTabCursor({
 		working,
 		commit,
@@ -242,6 +250,15 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	}
 	const focusTab = () => tabRef.current?.focus({ preventScroll: true });
 	function gridPick(cell: Cell, shift: boolean, take: number | null) {
+		if (touch && !shift) {
+			// Focused inside the tap: iOS raises a keyboard only for a focus made in the gesture.
+			fretBoxRef.current?.focus({ preventScroll: true });
+			// A first digit left waiting is the note of the cell it was typed on, as with keys.
+			fretBox.current?.flush();
+			tabCursor.pick(cell, false);
+			setFretBoxOpen(true);
+			return;
+		}
 		focusTab();
 		tabCursor.pick(cell, shift);
 		// The chord shape's fret the empty cell offered: written, and heard.
@@ -277,6 +294,21 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	});
 	const hearShape = useCallback((hints: readonly FretHint[]) => previewChordRef.current(hints), []);
 	const chordTools = useChordTools(working, user, loading, hearShape);
+	// The fret box's offer: the chord shape's fret on an empty cell, which a touch screen never shows in the cell.
+	const cursorNote = cursorSlot?.strings[cursor.stringIndex];
+	const cursorHint = chordTools.hintsAt(cursor.measureIndex, cursor.slotIndex)?.[cursor.stringIndex];
+	const offeredFret = typeof cursorHint === "number" && cursorNote?.fret == null && !cursorNote?.muted ? cursorHint : null;
+	const fretBoxPlaceholder = cursorNote?.muted
+		? "x"
+		: cursorNote?.fret != null
+			? String(cursorNote.fret)
+			: offeredFret !== null
+				? String(offeredFret)
+				: "";
+	function touchWrite(fret: number, advance: boolean) {
+		tabCursor.writeAt(cursor, fret);
+		if (advance) tabCursor.wroteAt(cursor, true);
+	}
 	function dockHit(stringIndex: number, fret: number, shift: boolean, pointer: boolean) {
 		if (pointer) tabRef.current?.focus({ preventScroll: true });
 		const cell = { measureIndex: cursor.measureIndex, slotIndex: cursor.slotIndex, stringIndex };
@@ -589,6 +621,19 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 												onBar={gridBar}
 												onBlank={gridBlank}
 											/>
+											{touch && ready && (
+												<TouchFretInput
+													ref={fretBoxRef}
+													control={fretBox}
+													sheetRef={tabRef}
+													cursor={cursor}
+													open={fretBoxOpen}
+													placeholder={fretBoxPlaceholder}
+													offered={offeredFret}
+													onEnter={touchWrite}
+													onClose={() => setFretBoxOpen(false)}
+												/>
+											)}
 										</div>
 									</>
 								)}

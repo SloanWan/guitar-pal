@@ -610,11 +610,7 @@ export default function SongSteps() {
 				tool="In your AI chat"
 				title="Every riff you find, ready to play."
 				demo={<InYourChat />}
-				link={{
-					href: "https://github.com/SloanWan/guitar-pal/blob/main/docs/mcp.md",
-					label: "How to connect",
-					external: true,
-				}}
+				link={{ href: "/docs/mcp", label: "How to connect" }}
 			>
 				Heard a riff you want to learn? Snap its tab or describe it in the AI app you already use, with Guitar Pal added
 				as a connector. Guitar Pal checks what the AI read and turns it into a tab that plays. Import the ones you like

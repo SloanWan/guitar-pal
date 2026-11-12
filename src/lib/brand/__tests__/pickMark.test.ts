@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+	LIGHT_SLOTS,
+	markSvg,
 	LOGO_CLOSE_MS,
 	LOGO_OPEN_MS,
 	MARK_PICKS,
@@ -160,5 +164,21 @@ describe("the CSS pick mask", () => {
 		const { PICK_PATH } = await import("@/lib/brand/pickMark");
 		const css = readFileSync(resolve(__dirname, "../../../app/primitives.css"), "utf8");
 		expect(css).toContain(`d='${PICK_PATH}'`);
+	});
+});
+
+describe("markSvg (#490)", () => {
+	it("draws the five picks in the slots given, and a gap under each but the back one", () => {
+		const svg = markSvg(336, LIGHT_SLOTS, "#F7F7F8");
+		expect(svg).toMatch(/^<svg [^>]*width="336" height="336" viewBox="2\.81 0\.97 26\.64 26\.64"/);
+		for (const colour of LIGHT_SLOTS) expect(svg).toContain(`fill="${colour}"`);
+		expect(svg.match(/fill="#F7F7F8"/g)).toHaveLength(4);
+	});
+
+	it("keeps the light slots the tokens' (--gp-lgl0…4)", () => {
+		const tokens = readFileSync(join(process.cwd(), "src/app/tokens.css"), "utf8");
+		LIGHT_SLOTS.forEach((colour, j) => {
+			expect(tokens).toMatch(new RegExp(`--gp-lgl${j}:\\s*${colour}`, "i"));
+		});
 	});
 });

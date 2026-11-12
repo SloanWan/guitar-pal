@@ -4,6 +4,7 @@ import "@/components/fingerpick/reader/tab.css";
 import { useOnline } from "@/hooks/useOnline";
 import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import TouchFretInput, { type TouchFretControl } from "./TouchFretInput";
+import TouchFretPad from "./TouchFretPad";
 import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
 import "@/components/playback/icons.css";
@@ -26,7 +27,7 @@ import { autoAdvanceOn, useFingerpickPrefs, writeLastPatternId } from "@/compone
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useUser } from "@/hooks/useUser";
 import { cropUrl, setExerciseStatus } from "@/lib/books/api";
-import { STRING_LABELS, clonePatternForEdit, makeDefaultPattern, setFret, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
+import { STRING_LABELS, clonePatternForEdit, makeDefaultPattern, setFret, setInactive, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
 import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { clampBpmToMeter } from "@/lib/strumBars";
@@ -214,8 +215,10 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const [toolsOpen, setToolsOpen] = useState(false);
 	const [toolsTab, setToolsTab] = useState<InspectorTab>("note");
 	// A touch screen has no keys to type a fret with, whatever its width: a tap on a cell opens a
-	// fret box over it instead (#479), and auto-advance starts on, as on a phone.
+	// fret box over it instead (#479), and auto-advance starts on, as on a phone. A tablet's
+	// box is a keypad of our own (#487): an iPad has no number pad, only its whole keyboard.
 	const touch = useCoarsePointer();
+	const tablet = touch && !phone;
 	const fretBoxRef = useRef<HTMLInputElement>(null);
 	const fretBox = useRef<TouchFretControl>(null);
 	const [fretBoxOpen, setFretBoxOpen] = useState(false);
@@ -251,8 +254,10 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const focusTab = () => tabRef.current?.focus({ preventScroll: true });
 	function gridPick(cell: Cell, shift: boolean, take: number | null) {
 		if (touch && !shift) {
-			// Focused inside the tap: iOS raises a keyboard only for a focus made in the gesture.
-			fretBoxRef.current?.focus({ preventScroll: true });
+			// A phone's box is focused inside the tap: iOS raises a keyboard only for a focus made in
+			// the gesture. A tablet's keypad leaves the keys with the tab, so no keyboard comes up.
+			if (tablet) focusTab();
+			else fretBoxRef.current?.focus({ preventScroll: true });
 			// A first digit left waiting is the note of the cell it was typed on, as with keys.
 			fretBox.current?.flush();
 			tabCursor.pick(cell, false);
@@ -621,7 +626,19 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 												onBar={gridBar}
 												onBlank={gridBlank}
 											/>
-											{touch && ready && (
+											{tablet && ready && fretBoxOpen && (
+												<TouchFretPad
+													control={fretBox}
+													sheetRef={tabRef}
+													cursor={cursor}
+													placeholder={fretBoxPlaceholder}
+													offered={offeredFret}
+													onEnter={touchWrite}
+													onClear={() => commit((p) => setInactive(p, cursor))}
+													onClose={() => setFretBoxOpen(false)}
+												/>
+											)}
+											{touch && !tablet && ready && (
 												<TouchFretInput
 													ref={fretBoxRef}
 													control={fretBox}

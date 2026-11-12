@@ -349,3 +349,102 @@ body {
 		}
 	}
 }
+
+/* The launch curtain (#490, layout.tsx): the installed app's cold start only. The launch
+   image's mark, in the same place and size (LAUNCH_MARK_PX, centred), comes to life: the
+   hand folds and fans open again as the resting pick lifts off and lands — the logo's
+   arrival (pickMark.ts) in CSS, since it plays before React does. LaunchCurtain lifts it
+   once the page is ready; at 1.5 s it lifts itself. Under the edge band. */
+.gp-launch {
+	display: none;
+}
+:root[data-launch] .gp-launch {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483646;
+	display: grid;
+	place-items: center;
+	background: var(--gp-page);
+	animation: gp-launch-out 220ms var(--gp-ease-out) 1500ms forwards;
+}
+:root[data-launch="lifting"] .gp-launch {
+	animation-delay: 0ms;
+}
+@keyframes gp-launch-out {
+	to {
+		opacity: 0;
+		visibility: hidden;
+	}
+}
+.gp-launch-mark {
+	width: 112px;
+	height: 112px;
+}
+.gp-launch-mark [data-pick] {
+	transform-box: view-box;
+	transform-origin: 15px 16.65px;
+	animation: gp-launch-fan 900ms both;
+}
+.gp-launch-mark [data-pick="0"] {
+	--fold: 34deg;
+}
+.gp-launch-mark [data-pick="1"] {
+	--fold: 11deg;
+	animation-delay: 45ms;
+}
+.gp-launch-mark [data-pick="2"] {
+	--fold: -12deg;
+	animation-delay: 90ms;
+}
+.gp-launch-mark [data-pick="3"] {
+	--fold: -35deg;
+	animation-delay: 135ms;
+}
+.gp-launch-mark [data-pick="4"] {
+	transform-origin: 21.6px 20.2px;
+	animation-name: gp-launch-land;
+}
+/* At rest first (the launch image), folded by 30%, fanned out again on a spring. */
+@keyframes gp-launch-fan {
+	0%,
+	12% {
+		transform: none;
+		animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+	}
+	30% {
+		transform: rotate(var(--fold));
+		animation-timing-function: var(--gp-spring-tab);
+	}
+	100% {
+		transform: none;
+	}
+}
+@keyframes gp-launch-land {
+	0%,
+	12% {
+		opacity: 1;
+		transform: none;
+		animation-timing-function: ease-in;
+	}
+	26% {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	50% {
+		opacity: 0;
+		transform: translate(9px, -10px) rotate(32deg);
+		animation-timing-function: var(--gp-spring-press);
+	}
+	60% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 1;
+		transform: none;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gp-launch-mark [data-pick] {
+		animation: none;
+	}
+}

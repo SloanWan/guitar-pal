@@ -84,6 +84,15 @@
 				color: var(--ink);
 				font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 			}
+			/* The shell's edge band (src/app/shell.css): a fixed strip of one colour over the
+			   top inset, or iPadOS blurs what lies under the status bar (#478). */
+			.edge {
+				position: fixed;
+				inset: 0 0 auto;
+				z-index: 2147483647;
+				height: env(safe-area-inset-top, 0px);
+				background: var(--page);
+			}
 			main {
 				width: 100%;
 				max-width: 440px;
@@ -232,6 +241,7 @@
 		</style>
 	</head>
 	<body>
+		<div class="edge" aria-hidden="true"></div>
 		<main>
 			<div class="brand">
 				<img src="/icon-192.png" alt="" />

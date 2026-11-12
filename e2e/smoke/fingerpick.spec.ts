@@ -229,11 +229,73 @@ test("a new shape for the held chord asks before throwing an edit away, and appl
 
 /**
  * A touch tablet takes the desktop layout by width, but has no keys to type a fret with
- * (#479): a tap on a cell opens a fret box over it, and the system's number keyboard
- * comes up. Auto-advance is on for a touch screen, so the box follows the cursor.
+ * (#479), and an iPad has no number pad — a numeric field raises its whole keyboard — so
+ * a tap on a cell opens a keypad of our own beside it and no field takes focus (#487).
+ * Auto-advance is on for a touch screen, so the keypad follows the cursor.
  */
 test.describe("on a touch tablet", () => {
 	test.use({ viewport: { width: 1194, height: 834 }, hasTouch: true, isMobile: true });
+
+	test("a tapped cell takes a fret from the keypad, one digit or two, and no keyboard field", async ({ page }) => {
+		await page.goto("/tab/edit/new");
+		await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).tap();
+		const pad = page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 1" });
+		await expect(pad).toBeVisible();
+		await expect(page.getByRole("textbox", { name: /^Fret for bar/ })).toHaveCount(0);
+		// The tab keeps the keys: nothing editable is focused, so no keyboard comes up.
+		await expect(page.getByRole("application", { name: /^Tab\./ })).toBeFocused();
+
+		await pad.getByRole("button", { name: "7", exact: true }).tap();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 7" })).toBeAttached();
+		// Auto-advance: the keypad moved on to the next slot, and a 1 waits for its second digit.
+		const next = page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 2" });
+		await next.getByRole("button", { name: "1", exact: true }).tap();
+		await expect(next.getByLabel("Typed fret")).toHaveText("1");
+		await next.getByRole("button", { name: "2", exact: true }).tap();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 12" })).toBeAttached();
+
+		// Backspace takes a digit back, then clears the note.
+		const third = page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 3" });
+		await third.getByRole("button", { name: "2", exact: true }).tap();
+		await third.getByRole("button", { name: "Delete digit" }).tap();
+		await expect(third.getByLabel("Typed fret")).toHaveText("–");
+		await page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 7" }).tap();
+		await page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 1" }).getByRole("button", { name: "Clear note" }).tap();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeAttached();
+
+		// A tap away from the keypad and the cells puts it away.
+		await page.locator("h1, header").first().tap();
+		await expect(page.getByRole("group", { name: /^Fret keypad/ })).toHaveCount(0);
+	});
+
+	test("a digit left waiting is written on its own cell when another cell is tapped", async ({ page }) => {
+		await page.goto("/tab/edit/new");
+		await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).tap();
+		await page.getByRole("group", { name: /^Fret keypad/ }).getByRole("button", { name: "2", exact: true }).tap();
+		// A cell above: the keypad lies over the strings under its cell.
+		await page.getByRole("button", { name: "Bar 1, slot 3, e string: empty", exact: true }).tap();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 2" })).toBeAttached();
+		// The keypad starts empty on the new cell: nothing rode along.
+		const pad = page.getByRole("group", { name: "Fret keypad: e string, bar 1, slot 3" });
+		await expect(pad.getByLabel("Typed fret")).toHaveText("–");
+		await pad.getByRole("button", { name: "4", exact: true }).tap();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 3, e string: fret 4", exact: true })).toBeAttached();
+	});
+
+	test("a hardware keyboard still types while the keypad is open", async ({ page }) => {
+		await page.goto("/tab/edit/new");
+		await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).tap();
+		await page.keyboard.type("5");
+		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 5" })).toBeAttached();
+	});
+});
+
+/**
+ * A phone keeps the system's number pad (#479): a tap on a cell lays a fret box over it,
+ * focused inside the tap so iOS raises its keyboard.
+ */
+test.describe("on a touch phone", () => {
+	test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
 	test("a tapped cell takes a typed fret, one digit or two", async ({ page }) => {
 		await page.goto("/tab/edit/new");
@@ -244,30 +306,15 @@ test.describe("on a touch tablet", () => {
 
 		await page.keyboard.type("7");
 		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 7" })).toBeAttached();
-		// Auto-advance: the box moved on to the next slot, and a 1 waits for its second digit.
 		const next = page.getByRole("textbox", { name: "Fret for bar 1, slot 2" });
 		await expect(next).toBeFocused();
 		await page.keyboard.type("12");
 		await expect(page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 12" })).toBeAttached();
 
 		// Escape closes it without writing.
-		await page.keyboard.type("5");
-		await expect(page.getByRole("button", { name: "Bar 1, slot 3, B string: fret 5" })).toBeAttached();
 		await page.keyboard.type("1");
 		await page.keyboard.press("Escape");
-		await expect(page.getByRole("button", { name: "Bar 1, slot 4, B string: empty" })).toBeAttached();
+		await expect(page.getByRole("button", { name: "Bar 1, slot 3, B string: empty" })).toBeAttached();
 		await expect(page.getByRole("textbox", { name: /^Fret for bar/ })).not.toBeFocused();
-	});
-
-	test("a digit left waiting is written on its own cell when another cell is tapped", async ({ page }) => {
-		await page.goto("/tab/edit/new");
-		await page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" }).tap();
-		await page.keyboard.type("2");
-		await page.getByRole("button", { name: "Bar 1, slot 3, G string: empty" }).tap();
-		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 2" })).toBeAttached();
-		// The box starts empty on the new cell: nothing rode along.
-		await expect(page.getByRole("textbox", { name: "Fret for bar 1, slot 3" })).toHaveValue("");
-		await page.keyboard.type("4");
-		await expect(page.getByRole("button", { name: "Bar 1, slot 3, G string: fret 4" })).toBeAttached();
 	});
 });

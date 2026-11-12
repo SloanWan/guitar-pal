@@ -5,16 +5,22 @@
    720px with the nav in the middle and the account on the right. Below 720px a 62px tab
    bar closes the column under <main>; it is part of the flex column, never over it, so it
    cannot cover content. Pages with their own fixed bars lift them by --gp-tabbar-h.
+
+   Installed and opened from the home screen, the page reaches the top edge
+   (viewport-fit=cover) and the system's bar lies over it — blurred on an iPad (#478).
+   The header grows by that inset and pads its content below it; in a browser tab the
+   inset is 0. --gp-safe-top is the one name for it, so a test can set it.
    ===================================================================================== */
 :root {
-	--gp-header-h: 52px;
+	--gp-safe-top: env(safe-area-inset-top, 0px);
+	--gp-header-h: calc(52px + var(--gp-safe-top));
 	--gp-tabbar-h: calc(62px + env(safe-area-inset-bottom));
 	/* everything the shell takes from the viewport's height */
 	--gp-chrome-h: calc(var(--gp-header-h) + var(--gp-tabbar-h));
 }
 @media (min-width: 720px) {
 	:root {
-		--gp-header-h: 56px;
+		--gp-header-h: calc(56px + var(--gp-safe-top));
 		--gp-tabbar-h: 0px;
 	}
 }
@@ -30,6 +36,7 @@ body {
 		z-index: 20;
 		flex: none;
 		height: var(--gp-header-h);
+		padding-top: var(--gp-safe-top);
 		background: var(--gp-page);
 		box-shadow: 0 1px 0 var(--gp-line);
 		color: var(--gp-ink);

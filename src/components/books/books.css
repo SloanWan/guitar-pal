@@ -1381,6 +1381,8 @@
 			top: 0;
 			right: 0;
 			bottom: 0;
+			/* Clear of the system's top bar in an installed app (#478). */
+			padding-top: var(--gp-safe-top);
 			width: min(440px, 94vw);
 			border-radius: var(--gp-r-xl) 0 0 var(--gp-r-xl);
 			box-shadow: var(--gp-shadow-pop);
@@ -1398,6 +1400,8 @@
 			left: 0;
 			width: auto;
 			height: 88dvh;
+			/* A sheet from the bottom stops short of the top bar. */
+			padding-top: 0;
 			border-radius: var(--gp-r-xl) var(--gp-r-xl) 0 0;
 		}
 		.bk-panel[data-motion] {

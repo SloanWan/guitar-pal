@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import Link from "@/components/AppLink";
+import { SECTION_TRANSITION } from "@/components/ModuleMain";
 import { Pick } from "@/components/ui/pick";
 import { TAB_ITEMS, tabKeyForPath } from "@/lib/navigation";
 import { signInHref } from "@/lib/safeRedirect";
@@ -27,6 +28,7 @@ export default function TabBar({ signedIn }: { signedIn: boolean }) {
 				<Link
 					key={item.key}
 					href={item.key === "me" ? meHref : item.href}
+					transitionTypes={[SECTION_TRANSITION]}
 					data-m={item.module}
 					aria-current={item.key === active ? "page" : undefined}
 				>

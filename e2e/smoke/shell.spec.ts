@@ -87,6 +87,35 @@ test("the header grows by the top safe area and keeps its content below it", { t
 });
 
 /**
+ * Padding alone leaves iPadOS's scroll edge blur over the header: WebKit skips it only when
+ * a fixed element of one colour is hit 4px below the middle of the top edge, at least 90%
+ * of the width and taller than 10px (#478). The edge band is that element, over the inset.
+ */
+test("a fixed band in the header's colour covers the top inset", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/strum");
+	const band = page.locator(".gp-edge-band");
+	expect((await band.boundingBox())?.height ?? 0).toBe(0);
+	await page.addStyleTag({ content: ":root { --gp-safe-top: 24px; }" });
+
+	const box = await band.boundingBox();
+	const width = page.viewportSize()?.width ?? 0;
+	expect(box).toEqual({ x: 0, y: 0, width, height: 24 });
+	const sampled = await page.evaluate(() => {
+		const hit = document.elementFromPoint(innerWidth / 2, 4);
+		const header = document.querySelector("header.gp-header");
+		return {
+			hit: hit?.className,
+			position: hit ? getComputedStyle(hit).position : "",
+			colour: hit ? getComputedStyle(hit).backgroundColor : "",
+			header: header ? getComputedStyle(header).backgroundColor : "",
+		};
+	});
+	expect(sampled.hit).toBe("gp-edge-band");
+	expect(sampled.position).toBe("fixed");
+	expect(sampled.colour).toBe(sampled.header);
+});
+
+/**
  * A header link moves to its section through a view transition typed `section` (#489);
  * the browser's back button does not animate.
  */

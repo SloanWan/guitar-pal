@@ -114,3 +114,33 @@ test("a fixed band in the header's colour covers the top inset", { tag: "@phone"
 	expect(sampled.position).toBe("fixed");
 	expect(sampled.colour).toBe(sampled.header);
 });
+
+/**
+ * A header link moves to its section through a view transition typed `section` (#489);
+ * the browser's back button does not animate.
+ */
+test("a header link animates the move to its section; back does not", async ({ page }) => {
+	await page.goto("/strum");
+	await page.evaluate(() => {
+		const w = window as unknown as { __vt: string[][] };
+		w.__vt = [];
+		const start = document.startViewTransition?.bind(document);
+		if (!start) return;
+		document.startViewTransition = ((arg: StartViewTransitionOptions) => {
+			w.__vt.push(arg && "types" in arg && arg.types ? [...arg.types] : []);
+			return start(arg);
+		}) as typeof document.startViewTransition;
+	});
+	const supported = await page.evaluate(() => "startViewTransition" in document);
+	test.skip(!supported, "no view transitions in this browser");
+
+	const nav = page.getByRole("navigation", { name: "Main" });
+	await nav.getByRole("link", { name: "Chords" }).click();
+	await expect(page).toHaveURL(/\/chords$/);
+	await expect(nav.getByRole("link", { name: "Chords" })).toHaveAttribute("aria-current", "page");
+	expect(await page.evaluate(() => (window as unknown as { __vt: string[][] }).__vt)).toEqual([["section"]]);
+
+	await page.goBack();
+	await expect(page).toHaveURL(/\/strum$/);
+	expect(await page.evaluate(() => (window as unknown as { __vt: string[][] }).__vt)).toEqual([["section"]]);
+});

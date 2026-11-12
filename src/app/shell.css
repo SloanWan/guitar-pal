@@ -49,6 +49,8 @@ body {
 	.gp-header {
 		position: relative;
 		z-index: 20;
+		/* Its own layer in a section transition, so it stays put (below). */
+		view-transition-name: gp-header;
 		flex: none;
 		height: var(--gp-header-h);
 		padding-top: var(--gp-safe-top);
@@ -362,5 +364,43 @@ body {
 		.gp-nav a::after {
 			transition: none;
 		}
+	}
+}
+
+/* A move to another section (#489, ModuleMain): the old page leaves 6px up and fades
+   (spec: screen leave), the new one fades in as its sections rise (gp-rise). The header is
+   shown live, not cross-faded, so the nav's pick keeps sliding; everything else outside
+   <main> (the tab bar, the page colour) changes at once. */
+::view-transition-old(root),
+::view-transition-new(root),
+::view-transition-group(gp-header),
+::view-transition-new(gp-header) {
+	animation: none;
+}
+::view-transition-old(gp-header) {
+	display: none;
+}
+::view-transition-old(.section) {
+	animation: gp-section-leave var(--gp-d-out) var(--gp-ease-out) both;
+}
+::view-transition-new(.section) {
+	animation: gp-section-enter var(--gp-d-in) var(--gp-ease-in) 60ms both;
+}
+@keyframes gp-section-leave {
+	to {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+}
+@keyframes gp-section-enter {
+	from {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
 	}
 }

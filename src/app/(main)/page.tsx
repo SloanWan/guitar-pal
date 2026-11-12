@@ -44,15 +44,15 @@ const PERKS: readonly { icon: typeof House; title: string; text: string }[] = [
 ];
 
 /* Every page the steps open, in their order; the assistant's link is the grammar it reads,
-   the MCP connector's the guide to adding it (it has no page of its own). */
-const FOOTER_PRODUCT: readonly { href: string; label: string; external?: boolean }[] = [
+   the MCP connector's the guide to adding it. */
+const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
 	{ href: "/strum", label: "Strum" },
 	{ href: "/tab", label: "Tab" },
 	{ href: "/chords", label: "Chords" },
 	{ href: "/fretboard", label: "Fretboard" },
 	{ href: "/docs/assistant-grammar", label: "Assistant" },
 	{ href: "/books/sample", label: "Books (preview)" },
-	{ href: "https://github.com/SloanWan/guitar-pal/blob/main/docs/mcp.md", label: "MCP connector", external: true },
+	{ href: "/docs/mcp", label: "MCP connector" },
 ];
 
 const CREDITS: readonly { lead: string; href: string; label: string; tail?: string }[] = [
@@ -165,17 +165,11 @@ export default function Home() {
 					<nav aria-label="Product">
 						<h2 className="mb-3 text-(length:--gp-t-cap) font-semibold text-gp-ink-3">Product</h2>
 						<ul className="flex flex-col gap-2.5">
-							{FOOTER_PRODUCT.map(({ href, label, external }) => (
+							{FOOTER_PRODUCT.map(({ href, label }) => (
 								<li key={href}>
-									{external ? (
-										<a href={href} target="_blank" rel="noopener noreferrer" className={FOOTER_LINK}>
-											{label}
-										</a>
-									) : (
-										<Link href={href} className={FOOTER_LINK}>
-											{label}
-										</Link>
-									)}
+									<Link href={href} className={FOOTER_LINK}>
+										{label}
+									</Link>
 								</li>
 							))}
 							{/* Dev tools, only when the flag is set (inlined at build time). */}

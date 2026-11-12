@@ -64,3 +64,24 @@ test("a first visit is light, and a saved dark is applied before paint", async (
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 	expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("dark");
 });
+
+/**
+ * Installed on an iPad, the page reaches the top edge and the system's blurred bar lies
+ * over it (#478). Standalone can't be emulated, so the inset is injected through the one
+ * property the shell reads it from.
+ */
+test("the header grows by the top safe area and keeps its content below it", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/strum");
+	const header = page.locator("header.gp-header");
+	const before = await header.boundingBox();
+	await page.addStyleTag({ content: ":root { --gp-safe-top: 24px; }" });
+
+	const after = await header.boundingBox();
+	expect(after?.height).toBeCloseTo((before?.height ?? 0) + 24, 0);
+	// The brand sits wholly below the inset, where nothing covers it.
+	const brand = await page.getByRole("link", { name: /Guitar Pal/ }).first().boundingBox();
+	expect(brand?.y ?? 0).toBeGreaterThanOrEqual(24);
+	// What follows the header moves down with it: nothing slides underneath.
+	const main = await page.locator("main").first().boundingBox();
+	expect(main?.y ?? 0).toBeGreaterThanOrEqual((after?.y ?? 0) + (after?.height ?? 0) - 1);
+});

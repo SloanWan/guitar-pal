@@ -272,7 +272,8 @@
    available, since App Router client navigation never triggers browser chrome. */
 .nav-progress {
 	position: fixed;
-	top: 0;
+	/* Under the system's top bar in an installed app, the bar would not be seen (#478). */
+	top: var(--gp-safe-top, 0px);
 	left: 0;
 	right: 0;
 	height: 3px;

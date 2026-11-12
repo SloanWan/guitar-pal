@@ -9,17 +9,15 @@ describe("connectSnippets", () => {
 		for (const client of CONNECT_CLIENTS) expect(snippets[client]).toContain(MCP_URL);
 	});
 
-	it("gives claude.ai the bare URL and Claude Code an http add command", () => {
+	it("gives claude.ai and ChatGPT the bare URL and Claude Code an http add command", () => {
 		expect(snippets.claude).toBe(MCP_URL);
+		expect(snippets.chatgpt).toBe(MCP_URL);
 		expect(snippets.claudeCode).toBe(`claude mcp add --transport http guitar-pal ${MCP_URL}`);
 	});
 
 	it("writes each config file in its client's shape", () => {
 		expect(JSON.parse(snippets.cursor)).toEqual({ mcpServers: { [MCP_SERVER_NAME]: { url: MCP_URL } } });
 		expect(JSON.parse(snippets.vscode)).toEqual({ servers: { [MCP_SERVER_NAME]: { type: "http", url: MCP_URL } } });
-		expect(JSON.parse(snippets.other)).toEqual({
-			mcpServers: { [MCP_SERVER_NAME]: { command: "npx", args: ["-y", "mcp-remote", MCP_URL] } },
-		});
 	});
 
 	it("builds every snippet from the URL it is given", () => {

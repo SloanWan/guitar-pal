@@ -1,0 +1,31 @@
+import { expect, hydrated, test } from "../fixtures";
+
+/** The MCP connect page (#486): only the chosen client's card is on the page. */
+test("the MCP page shows the URL and one client's setup at a time", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/docs/mcp?lang=en");
+	await expect(page.getByRole("heading", { name: "Connect Guitar Pal to your AI", level: 1 })).toBeVisible();
+	await expect(page.getByText("https://guitarpal.sloanwan.com/api/mcp", { exact: true }).first()).toBeVisible();
+
+	const clients = page.getByRole("radiogroup", { name: "Your app" });
+	await hydrated(clients);
+	await expect(clients.getByRole("radio", { name: "Claude", exact: true })).toBeChecked();
+	await expect(page.getByRole("button", { name: "Copy the command" })).toHaveCount(0);
+
+	await clients.getByRole("radio", { name: "Claude Code" }).click();
+	await expect(page.getByRole("button", { name: "Copy the command" })).toBeVisible();
+	await expect(page.getByText("claude mcp add --transport http guitar-pal", { exact: false })).toBeVisible();
+
+	await clients.getByRole("radio", { name: "Cursor" }).click();
+	await expect(page.getByRole("button", { name: "Copy the config" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Copy the command" })).toHaveCount(0);
+
+	// Five clients outgrow a phone: the picker scrolls, never the page.
+	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+	expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("the MCP page reads in Chinese", async ({ page }) => {
+	await page.goto("/docs/mcp?lang=zh");
+	await expect(page.getByRole("heading", { name: "把 Guitar Pal 接入你的 AI", level: 1 })).toBeVisible();
+	await expect(page.getByRole("radiogroup", { name: "你的应用" })).toBeVisible();
+});

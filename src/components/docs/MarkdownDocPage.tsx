@@ -1,0 +1,27 @@
+import DocLangSwitch from "@/components/docs/DocLangSwitch";
+import DocToc from "@/components/docs/DocToc";
+import { PAGE_GUTTER } from "@/components/auth/formText";
+import type { DocLang } from "@/lib/docs/docLang";
+import type { RenderedDoc } from "@/lib/docs/renderDoc";
+import "./doc.css";
+
+/**
+ * A document from `docs/` as a page: the outline beside it from 960px, the
+ * language switch above the prose. The documents are the repo's own, never a
+ * visitor's, so their HTML is set as rendered (`renderDoc`).
+ */
+export default function MarkdownDocPage({ lang, doc, tocLabel }: { lang: DocLang; doc: RenderedDoc; tocLabel: string }) {
+	return (
+		<div
+			className={`gp-rise mx-auto flex w-full max-w-300 flex-col py-8 max-sm:py-6 min-[960px]:flex-row min-[960px]:gap-12 ${PAGE_GUTTER}`}
+		>
+			<DocToc entries={doc.toc} label={tocLabel} />
+			<div className="doc-column min-w-0 flex-1">
+				<div className="mb-5 flex justify-end min-[960px]:mb-2">
+					<DocLangSwitch lang={lang} />
+				</div>
+				<article lang={lang} className="doc-prose" dangerouslySetInnerHTML={{ __html: doc.html }} />
+			</div>
+		</div>
+	);
+}

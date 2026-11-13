@@ -6,6 +6,7 @@ import { SongPlayerProvider } from "@/components/landing/song/SongPlayer";
 import { LateNightLine, TuningEgg } from "@/components/landing/song/Eggs";
 import { Button } from "@/components/ui/button";
 import { PickMark } from "@/components/ui/pick";
+import { LEGAL_DOC_NAMES, LEGAL_DOCS } from "@/lib/docs/legalDocs";
 
 /* The landing page (#363 step 16, scheme D): one song walked from a sentence
    to the player's hands, every tool doing its part on the same eight bars,
@@ -199,7 +200,20 @@ export default function Home() {
 					</div>
 				</div>
 				<div className="border-t border-gp-line">
-					<p className={`${WRAP} py-5 text-gp-ink-3`}>© 2026 Guitar Pal</p>
+					<div className={`${WRAP} flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-5 text-gp-ink-3`}>
+						<p>© 2026 Guitar Pal</p>
+						<nav aria-label="Legal">
+							<ul className="flex gap-5">
+								{LEGAL_DOC_NAMES.map((name) => (
+									<li key={name}>
+										<Link href={`/${name}`} className={FOOTER_LINK}>
+											{LEGAL_DOCS[name].en.label}
+										</Link>
+									</li>
+								))}
+							</ul>
+						</nav>
+					</div>
 				</div>
 			</footer>
 		</div>

@@ -38,6 +38,9 @@ const nextConfig: NextConfig = {
 	// trace has to carry the file into the standalone output.
 	outputFileTracingIncludes: {
 		"/docs/assistant-grammar": ["./docs/assistant-grammar.md", "./docs/assistant-grammar.zh.md"],
+		"/privacy": ["./docs/legal/privacy.md", "./docs/legal/privacy.zh.md"],
+		"/terms": ["./docs/legal/terms.md", "./docs/legal/terms.zh.md"],
+		"/support": ["./docs/legal/support.md", "./docs/legal/support.zh.md"],
 	},
 	// The Tab page lived at /fingerpick; links and bookmarks from then still land.
 	// The query (?pattern=…, ?draft=…) is carried across.

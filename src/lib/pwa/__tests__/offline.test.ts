@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { accountChanged, accountToRecord, forgetKeptPages, serviceWorkerUrl } from "../offline";
+import { describe, expect, it, vi } from "vitest";
+import { accountChanged, accountToRecord, askToWarm, forgetKeptPages, serviceWorkerUrl } from "../offline";
 
 describe("serviceWorkerUrl", () => {
 	it("carries the build, so each build registers a new worker", () => {
@@ -53,5 +53,17 @@ describe("forgetKeptPages", () => {
 		} as unknown as CacheStorage;
 		await forgetKeptPages(storage);
 		expect([...names].sort()).toEqual(["gp-data-new", "gp-static-new", "someone-else"]);
+	});
+});
+
+describe("askToWarm", () => {
+	it("asks the worker controlling the page to fetch the tool pages", () => {
+		const postMessage = vi.fn();
+		askToWarm({ controller: { postMessage } as unknown as ServiceWorker });
+		expect(postMessage).toHaveBeenCalledWith("warm");
+	});
+
+	it("does nothing on a page no worker controls", () => {
+		expect(() => askToWarm({ controller: null })).not.toThrow();
 	});
 });

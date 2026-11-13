@@ -42,3 +42,14 @@ export async function forgetKeptPages(storage: CacheStorage): Promise<void> {
 	const keys = await storage.keys();
 	await Promise.all(keys.filter((key) => key.startsWith(PAGE_CACHE_PREFIX)).map((key) => storage.delete(key)));
 }
+
+/**
+ * Asks the worker that controls the page to fetch the tool pages it has not kept (`warm` in
+ * `public/sw.js`). Asked when a worker takes the page over — a new build's starts with no
+ * pages, and the one that was running when the page asked before has had its caches
+ * dropped — and after the kept pages were forgotten, so they are there again for the
+ * account now signed in.
+ */
+export function askToWarm(container: Pick<ServiceWorkerContainer, "controller">): void {
+	container.controller?.postMessage("warm");
+}

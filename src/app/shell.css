@@ -18,11 +18,12 @@
    band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
    inset only, so it is 0 tall wherever the inset is.
 
-   On an installed iPad the blur still reaches below the status bar, past the band, into the
-   top of the header. There --gp-edge-blur adds that much to the inset: the band, the header's
-   padding and every panel that clears the inset grow by it, so the header's content sits
-   centred below the blur rather than the header growing around it. Only iOS (the touch
-   callout is WebKit-on-iOS only), only installed, only from 720px; 0 everywhere else.
+   Installed on an iPad or an iPhone, the blur still reaches below the status bar, past the
+   band, into the top of the header. There --gp-edge-blur adds that much to the inset: the
+   band, the header's padding and every panel that clears the inset grow by it, so the
+   header's content sits centred below the blur rather than the header growing around it.
+   Only iOS (the touch callout is WebKit-on-iOS only), only installed, and only under a
+   status bar: an inset of 0 (a phone on its side) makes it 0 too; 0 everywhere else.
    ===================================================================================== */
 :root {
 	--gp-edge-blur: 0px;
@@ -38,10 +39,11 @@
 		--gp-tabbar-h: 0px;
 	}
 }
-@media (display-mode: standalone) and (min-width: 720px) {
+@media (display-mode: standalone) {
 	@supports (-webkit-touch-callout: none) {
 		:root {
-			--gp-edge-blur: 16px;
+			/* 16px wherever there is an inset at all: any inset × 100 is past 16px */
+			--gp-edge-blur: min(16px, env(safe-area-inset-top, 0px) * 100);
 		}
 	}
 }

@@ -16,6 +16,26 @@ test.describe("on a phone", { tag: "@phone" }, () => {
 		await expect(tabs.getByRole("link", { name: "Strum" })).toHaveAttribute("aria-current", "page");
 	});
 
+	test("a pressed tab's pick slides there at once, before the page lands", async ({ page }) => {
+		await page.goto("/chords");
+		const tabs = page.getByRole("navigation", { name: "Tabs" });
+		const pick = tabs.locator(".gp-tab-ind");
+		await expect(pick).toHaveCSS("--i", "3");
+		// Hold the page back, so the press is all there is to see.
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await page.route(/\/strum\?_rsc=/, async (route) => {
+			await held;
+			await route.continue();
+		});
+		await tabs.getByRole("link", { name: "Strum" }).click();
+		await expect(pick).toHaveCSS("--i", "1");
+		await expect(tabs.getByRole("link", { name: "Chords" })).toHaveAttribute("aria-current", "page");
+		release();
+		await expect(tabs.getByRole("link", { name: "Strum" })).toHaveAttribute("aria-current", "page");
+		await expect(pick).toHaveCSS("--i", "1");
+	});
+
 	test("More opens Books", async ({ page }) => {
 		await page.goto("/strum");
 		await page.getByRole("button", { name: "More" }).click();

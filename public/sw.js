@@ -179,11 +179,21 @@ async function staleWhileRevalidate(event) {
 	return network;
 }
 
+/**
+ * Whether a newer build's worker has taken over: its activation dropped this one's caches,
+ * and opening one now would only bring it back, for nobody.
+ */
+function replaced() {
+	return self.registration.active?.scriptURL !== self.location.href;
+}
+
 /** Fetches the tool pages not kept yet, with the build files each names. Asked for by the page once the worker runs. */
 async function warmPages() {
+	if (replaced()) return;
 	const pages = await caches.open(PAGES_CACHE);
 	const statics = await caches.open(STATIC_CACHE);
 	for (const path of WARM_PAGES) {
+		if (replaced()) return;
 		const url = new URL(path, self.location.origin).href;
 		if (await pages.match(url)) continue;
 		try {
@@ -227,8 +237,15 @@ self.addEventListener("activate", (event) => {
 	);
 });
 
+/** One round at a time: the page may ask twice as the worker starts (it runs, then takes the page over). */
+let warming = null;
+
 self.addEventListener("message", (event) => {
-	if (event.data === "warm") event.waitUntil(warmPages());
+	if (event.data !== "warm") return;
+	warming ??= warmPages().finally(() => {
+		warming = null;
+	});
+	event.waitUntil(warming);
 });
 
 self.addEventListener("fetch", (event) => {

@@ -9,25 +9,26 @@
    Installed and opened from the home screen, the page reaches the top edge
    (viewport-fit=cover) and the system's bar lies over it — blurred on an iPad (#478).
    The header grows by that inset and pads its content below it; in a browser tab the
-   inset is 0. --gp-safe-top is the one name for it, so a test can set it.
+   inset is 0. --gp-inset-top is the one name for it, so a test can set it.
 
    Padding is not enough on an iPad: iPadOS 26 draws its scroll edge effect, a blur, under
    the status bar whatever lies there, unless a fixed element of one colour covers the top
    edge — WebKit hit-tests 4px below the middle of the edge and wants it at least 90% of
    the width and taller than 10px, then fills the system's area with its colour. The edge
    band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
-   inset only, so it is 0 tall wherever the inset is.
+   top of the header.
 
-   Installed on an iPad or an iPhone, the blur still reaches below the status bar, past the
-   band, into the top of the header. There --gp-edge-blur adds that much to the inset: the
-   band, the header's padding and every panel that clears the inset grow by it, so the
-   header's content sits centred below the blur rather than the header growing around it.
-   Only iOS (the touch callout is WebKit-on-iOS only), only installed, and only under a
-   status bar: an inset of 0 (a phone on its side) makes it 0 too; 0 everywhere else.
+   Even so the blur reaches below the status bar into the top of the header, on an iPad in
+   either orientation and on an iPhone. Telling those cases apart failed (a reported inset
+   and an installed app are not the whole story), so every page pads by --gp-edge-blur on
+   top of the inset, everywhere: --gp-safe-top is the two together, and the band, the
+   header's padding and every panel that clears the top grow by it. The header's content
+   sits centred below the blur rather than the header growing around it.
    ===================================================================================== */
 :root {
-	--gp-edge-blur: 0px;
-	--gp-safe-top: calc(env(safe-area-inset-top, 0px) + var(--gp-edge-blur));
+	--gp-inset-top: env(safe-area-inset-top, 0px);
+	--gp-edge-blur: 16px;
+	--gp-safe-top: calc(var(--gp-inset-top) + var(--gp-edge-blur));
 	--gp-header-h: calc(52px + var(--gp-safe-top));
 	--gp-tabbar-h: calc(62px + env(safe-area-inset-bottom));
 	/* everything the shell takes from the viewport's height */
@@ -37,14 +38,6 @@
 	:root {
 		--gp-header-h: calc(56px + var(--gp-safe-top));
 		--gp-tabbar-h: 0px;
-	}
-}
-@media (display-mode: standalone) {
-	@supports (-webkit-touch-callout: none) {
-		:root {
-			/* 16px wherever there is an inset at all: any inset × 100 is past 16px */
-			--gp-edge-blur: min(16px, env(safe-area-inset-top, 0px) * 100);
-		}
 	}
 }
 /* With viewport-fit=cover a phone on its side lays the page under the notch:

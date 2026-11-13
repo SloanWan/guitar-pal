@@ -1,46 +1,46 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState } from "react";
 import Link from "@/components/AppLink";
-import { DOC_LANGS, type DocLang } from "@/lib/docs/docLang";
+import type { DocLang } from "@/lib/docs/docLang";
+import "./langSwitch.css";
 
 /**
- * The language switch on a document page: one segment per language the
- * document exists in, the current one raised. Each is a link to the same
- * page with `?lang=`, so the choice is in the URL — shareable, and what the
- * page renders on the server — rather than in a store. It wears the
- * Segmented track (`gp-seg`) but stays links, not a radiogroup.
+ * The language switch on a document page, shaped like the theme switch: a
+ * round thumb carrying the current language (EN left on a neutral track, 中
+ * right on the module's), the other one faint in the empty side. It is a link
+ * to the same page with `?lang=`, so the choice is in the URL — shareable, and
+ * what the page renders on the server — and it works before hydration. A press
+ * slides the thumb at once; the page follows when the navigation lands.
  */
 
-const LABELS: Record<DocLang, string> = { en: "English", zh: "中文" };
+const THUMB: Record<DocLang, string> = { en: "EN", zh: "中" };
+const NAME: Record<DocLang, string> = { en: "English", zh: "中文" };
 
 export default function DocLangSwitch({ lang }: { lang: DocLang }) {
-	// Segmented's own thumb math, inline: that module is a client one, and
-	// this switch renders on the server.
-	const index = DOC_LANGS.indexOf(lang);
+	const next: DocLang = lang === "en" ? "zh" : "en";
+	// The language a press is heading to, until the page arrives in it.
+	const [heading, setHeading] = useState<DocLang | null>(null);
+	const shown = heading !== null && heading !== lang ? heading : lang;
+	const other: DocLang = shown === "en" ? "zh" : "en";
+
 	return (
-		<nav aria-label="Language" data-dense="" className="gp-seg">
-			{index >= 0 && (
-				<span
-					className="gp-seg-thumb"
-					aria-hidden
-					style={{ "--i": index, "--n": DOC_LANGS.length } as CSSProperties}
-				/>
-			)}
-			{DOC_LANGS.map((option) => {
-				const current = option === lang;
-				return (
-					<Link
-						key={option}
-						href={`?lang=${option}`}
-						aria-current={current ? "page" : undefined}
-						hrefLang={option}
-						className={`gp-focus relative z-1 flex items-center justify-center rounded-gp-sm px-2.5 text-[13px] leading-none font-semibold whitespace-nowrap transition-colors duration-(--gp-d-state) ${
-							current ? "text-gp-ink" : "text-gp-ink-3 hover:text-gp-ink-2"
-						}`}
-					>
-						{LABELS[option]}
-					</Link>
-				);
-			})}
+		<nav aria-label="Language" className="doc-lang-nav">
+			<Link
+				href={`?lang=${next}`}
+				hrefLang={next}
+				aria-label={`${NAME[lang]}. Switch to ${NAME[next]}`}
+				data-lang={shown}
+				className="doc-lang gp-focus"
+				onNavigate={() => setHeading(next)}
+			>
+				<span className="doc-lang-other" aria-hidden>
+					{THUMB[other]}
+				</span>
+				<span className="doc-lang-thumb" aria-hidden>
+					{THUMB[shown]}
+				</span>
+			</Link>
 		</nav>
 	);
 }

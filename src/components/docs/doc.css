@@ -3,8 +3,8 @@
    for everything read; a monospace only for what is typed, since an ASCII tab
    lines up only in one. */
 
-/* The article and the language switch above it share one measure, so the
-   switch ends where the lines do. `ch` is the prose font's, set here. */
+/* The title row and the article share one measure, so the switch ends where
+   the lines do. `ch` is the prose font's, set here. */
 .doc-column {
 	font-family: var(--gp-f-body);
 	font-size: var(--gp-t-body);
@@ -15,6 +15,33 @@
 	--doc-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	line-height: var(--gp-lh-body);
 	color: var(--gp-ink-2);
+}
+
+/* The title on the left, the language switch on the right. A long title
+   wraps under itself; the switch stays level with its first line. */
+.doc-title-row {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+
+.doc-title,
+.doc-prose h1 {
+	font-family: var(--gp-f-disp);
+	font-size: var(--gp-t-xl);
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: var(--gp-lh-head);
+	color: var(--gp-ink);
+	text-wrap: balance;
+}
+
+.doc-title {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
 }
 
 .doc-prose h1,
@@ -28,14 +55,11 @@
 }
 
 .doc-prose h1 {
-	font-size: var(--gp-t-xl);
-	font-weight: 700;
-	letter-spacing: -0.015em;
-	line-height: var(--gp-lh-head);
 	margin: 0 0 1rem;
 }
 
 @media (min-width: 960px) {
+	.doc-title,
 	.doc-prose h1 {
 		font-size: var(--gp-t-xl-lg);
 	}

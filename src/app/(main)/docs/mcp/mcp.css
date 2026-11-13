@@ -56,14 +56,18 @@
 	overflow-wrap: anywhere;
 }
 
-/* The language switch sits at the title's end, wrapping under it when the
-   title needs the line. */
+/* The language switch stays level with the title's first line; a long title
+   wraps under itself rather than pushing the switch to a row of its own. */
 .mcp-title-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 0.75rem 1.5rem;
+	gap: 1rem;
+}
+
+.mcp-title-row > h1 {
+	flex: 1;
+	min-width: 0;
 }
 
 .mcp-lead {

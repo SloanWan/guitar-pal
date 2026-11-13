@@ -47,3 +47,26 @@ test("the landing footer reaches privacy, terms and support, in both languages",
 	await expect(page.getByRole("heading", { name: "Support", level: 1 })).toBeVisible();
 	await expect(page.getByRole("link", { name: "nysuswan@gmail.com" }).first()).toHaveAttribute("href", "mailto:nysuswan@gmail.com");
 });
+
+/** The title and the language switch share the first row (#515), and the switch is a link to the other language. */
+test("a document's title and language switch share a row, and the switch changes the language", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/privacy?lang=en");
+	const title = page.getByRole("heading", { name: "Privacy policy", level: 1 });
+	const toggle = page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: /Switch to 中文/ });
+	await expect(title).toBeVisible();
+	const [t, s] = [await title.boundingBox(), await toggle.boundingBox()];
+	expect(t && s).toBeTruthy();
+	// Level with the title's first line, beside it rather than above or below.
+	expect(s!.y).toBeLessThan(t!.y + 40);
+	expect(s!.y + s!.height).toBeGreaterThan(t!.y);
+	expect(s!.x).toBeGreaterThan(t!.x);
+
+	await hydrated(toggle);
+	await toggle.click();
+	await expect(page).toHaveURL(/lang=zh/);
+	await expect(page.getByRole("heading", { name: "隐私政策", level: 1 })).toBeVisible();
+	await expect(page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: /Switch to English/ })).toBeVisible();
+
+	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+	expect(overflow).toBeLessThanOrEqual(0);
+});

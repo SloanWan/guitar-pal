@@ -1,0 +1,93 @@
+/* The document pages' language switch (DocLangSwitch): the theme switch's
+   track and thumb (primitives.css .gp-sw), a size up so the thumb can carry
+   a label. English rests left on the edge colour, 中文 right on the module's;
+   the language a press goes to sits faint in the empty side of the track.
+   The thumb takes colours that pair with what it carries: a neutral face and
+   ink on the edge track, the module's on-colour and fill on the module track,
+   so the label reads in both themes and on every module (a white thumb would
+   vanish on Home's light fill in dark). */
+
+.doc-lang-nav {
+	display: flex;
+	flex: none;
+}
+
+.doc-lang {
+	--doc-lang-w: 58px;
+	--doc-lang-h: 30px;
+	--doc-lang-thumb: 24px;
+	position: relative;
+	display: block;
+	flex: none;
+	width: var(--doc-lang-w);
+	height: var(--doc-lang-h);
+	border-radius: var(--gp-r-pill);
+	background: var(--gp-edge);
+	font-family: var(--gp-f-body);
+	font-weight: 700;
+	line-height: 1;
+	transition: background-color var(--gp-d-state) var(--gp-ease-state);
+}
+
+.doc-lang[data-lang="zh"] {
+	background: var(--gp-m-500);
+}
+
+.doc-lang-thumb {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	display: grid;
+	place-items: center;
+	width: var(--doc-lang-thumb);
+	height: var(--doc-lang-thumb);
+	border-radius: 50%;
+	background: var(--gp-face);
+	color: var(--gp-ink);
+	font-size: 10.5px;
+	letter-spacing: 0.02em;
+	box-shadow: var(--gp-ring-shn), 1.5px 1.5px 0 0 var(--gp-shn);
+	transition:
+		transform var(--gp-d-tab) var(--gp-spring-tab),
+		background-color var(--gp-d-state) var(--gp-ease-state),
+		color var(--gp-d-state) var(--gp-ease-state),
+		box-shadow var(--gp-d-state) var(--gp-ease-state);
+}
+
+.doc-lang[data-lang="zh"] .doc-lang-thumb {
+	transform: translateX(calc(var(--doc-lang-w) - var(--doc-lang-thumb) - 6px));
+	background: var(--gp-m-on);
+	color: var(--gp-m-500);
+	font-size: 12px;
+	letter-spacing: 0;
+	box-shadow: var(--gp-ring-m), 1.5px 1.5px 0 0 var(--gp-m-sh);
+}
+
+/* The empty side: right of the thumb in English, left of it in 中文. */
+.doc-lang-other {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	display: grid;
+	place-items: center;
+	width: calc(var(--doc-lang-w) - var(--doc-lang-thumb) - 3px);
+	color: var(--gp-ink-3);
+	font-size: 12px;
+}
+
+.doc-lang[data-lang="zh"] .doc-lang-other {
+	right: auto;
+	left: 0;
+	color: var(--gp-m-on);
+	opacity: 0.75;
+	font-size: 10.5px;
+	letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.doc-lang,
+	.doc-lang-thumb {
+		transition: none;
+	}
+}

@@ -37,9 +37,10 @@ describe("renderDoc", () => {
 		].join("\n"),
 	);
 
-	it("takes the first h1 as the title and keeps it out of the outline", () => {
+	it("takes the first h1 as the title, out of the HTML and the outline", () => {
 		expect(doc.title).toBe("The title");
-		expect(doc.html).toContain("<h1>The title</h1>");
+		expect(doc.titleHtml).toBe("The title");
+		expect(doc.html).not.toContain("<h1>");
 		expect(doc.toc.every((e) => e.text !== "The title")).toBe(true);
 	});
 

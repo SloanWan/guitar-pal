@@ -1,9 +1,11 @@
 import { Marked, type Token, type Tokens } from "marked";
 
 /**
- * A Markdown document as a page: the HTML, the title, and the headings a
- * sidebar lists. Headings get ids so the sidebar can link to them; the first
- * `#` is the title and is left out of the outline, `##` and `###` are in it.
+ * A Markdown document as a page: the title, the HTML under it, and the
+ * headings a sidebar lists. Headings get ids so the sidebar can link to them;
+ * the first `#` is the title, taken out of the HTML (the page sets it in its
+ * own row, beside the language switch) and out of the outline; `##` and `###`
+ * are in the outline.
  *
  * The documents this renders are the repo's own (`docs/*.md`), never a
  * visitor's, which is why the HTML is trusted as written.
@@ -16,7 +18,10 @@ export interface TocEntry {
 }
 
 export interface RenderedDoc {
+	/** The first `#`, as plain text (for metadata) and as inline HTML (for the page). */
 	title: string;
+	titleHtml: string;
+	/** Everything but the title. */
 	html: string;
 	toc: TocEntry[];
 }
@@ -53,6 +58,7 @@ export function renderDoc(markdown: string): RenderedDoc {
 	const toc: TocEntry[] = [];
 	const taken = new Map<string, number>();
 	let title = "";
+	let titleHtml = "";
 
 	const marked = new Marked({
 		gfm: true,
@@ -61,8 +67,10 @@ export function renderDoc(markdown: string): RenderedDoc {
 				const text = plainText(tokens);
 				const inner = this.parser.parseInline(tokens);
 				if (depth === 1) {
-					if (title === "") title = text;
-					return `<h1>${inner}</h1>\n`;
+					if (title !== "") return `<h1>${inner}</h1>\n`;
+					title = text;
+					titleHtml = inner;
+					return "";
 				}
 				const id = uniqueId(slugify(text) || `section-${toc.length + 1}`, taken);
 				if (depth === 2 || depth === 3) toc.push({ id, text, depth });
@@ -72,5 +80,5 @@ export function renderDoc(markdown: string): RenderedDoc {
 	});
 
 	const html = marked.parse(markdown, { async: false });
-	return { title, html, toc };
+	return { title, titleHtml, html, toc };
 }

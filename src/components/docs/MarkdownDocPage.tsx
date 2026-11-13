@@ -7,8 +7,9 @@ import "./doc.css";
 
 /**
  * A document from `docs/` as a page: the outline beside it from 960px, the
- * language switch above the prose. The documents are the repo's own, never a
- * visitor's, so their HTML is set as rendered (`renderDoc`).
+ * title and the language switch on one row above the prose. The documents are
+ * the repo's own, never a visitor's, so their HTML is set as rendered
+ * (`renderDoc`).
  */
 export default function MarkdownDocPage({ lang, doc, tocLabel }: { lang: DocLang; doc: RenderedDoc; tocLabel: string }) {
 	return (
@@ -17,9 +18,10 @@ export default function MarkdownDocPage({ lang, doc, tocLabel }: { lang: DocLang
 		>
 			<DocToc entries={doc.toc} label={tocLabel} />
 			<div className="doc-column min-w-0 flex-1">
-				<div className="mb-5 flex justify-end min-[960px]:mb-2">
+				<header lang={lang} className="doc-title-row">
+					<h1 className="doc-title" dangerouslySetInnerHTML={{ __html: doc.titleHtml }} />
 					<DocLangSwitch lang={lang} />
-				</div>
+				</header>
 				<article lang={lang} className="doc-prose" dangerouslySetInnerHTML={{ __html: doc.html }} />
 			</div>
 		</div>

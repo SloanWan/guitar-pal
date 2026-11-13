@@ -27,6 +27,17 @@ test("the MCP page shows the URL and one client's setup at a time", { tag: "@pho
 	expect(overflow).toBeLessThanOrEqual(0);
 });
 
+/** Four things to ask for, each with requests to copy, and the outline beside them (#515). */
+test("the MCP page groups its requests by what they ask for", async ({ page }) => {
+	await page.goto("/docs/mcp?lang=en");
+	const ask = page.locator("section", { has: page.getByRole("heading", { name: "Try asking", level: 2 }) });
+	for (const heading of ["Write a fingerpicking tab", "Write a strumming pattern", "Read a tab from a picture", "Change or rearrange it"]) {
+		await expect(ask.getByRole("heading", { name: heading, level: 3 })).toBeVisible();
+	}
+	await expect(ask.getByRole("button", { name: "Copy the request" })).toHaveCount(12);
+	await expect(page.getByRole("navigation", { name: "On this page" }).first()).toBeAttached();
+});
+
 test("the MCP page reads in Chinese", async ({ page }) => {
 	await page.goto("/docs/mcp?lang=zh");
 	await expect(page.getByRole("heading", { name: "把 Guitar Pal 接入你的 AI", level: 1 })).toBeVisible();
@@ -46,4 +57,40 @@ test("the landing footer reaches privacy, terms and support, in both languages",
 	await page.goto("/support?lang=en");
 	await expect(page.getByRole("heading", { name: "Support", level: 1 })).toBeVisible();
 	await expect(page.getByRole("link", { name: "nysuswan@gmail.com" }).first()).toHaveAttribute("href", "mailto:nysuswan@gmail.com");
+});
+
+/** The title and the language switch share the first row (#515), and the switch is a link to the other language. */
+test("a document's title and language switch share a row, and the switch changes the language", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/privacy?lang=en");
+	const title = page.getByRole("heading", { name: "Privacy policy", level: 1 });
+	const toggle = page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: /Switch to 中文/ });
+	await expect(title).toBeVisible();
+	const [t, s] = [await title.boundingBox(), await toggle.boundingBox()];
+	expect(t && s).toBeTruthy();
+	// Level with the title's first line, beside it rather than above or below.
+	expect(s!.y).toBeLessThan(t!.y + 40);
+	expect(s!.y + s!.height).toBeGreaterThan(t!.y);
+	expect(s!.x).toBeGreaterThan(t!.x);
+
+	await hydrated(toggle);
+	await toggle.click();
+	await expect(page).toHaveURL(/lang=zh/);
+	await expect(page.getByRole("heading", { name: "隐私政策", level: 1 })).toBeVisible();
+	await expect(page.getByRole("navigation", { name: "Language" }).getByRole("link", { name: /Switch to English/ })).toBeVisible();
+
+	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+	expect(overflow).toBeLessThanOrEqual(0);
+});
+
+/** The support page's questions are closed until pressed, and close again (#515). */
+test("the support page's questions open and close", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/support?lang=en");
+	const question = page.getByRole("article").getByText("Why is there no sound?", { exact: true });
+	const answer = page.getByText("turn Silent mode off.", { exact: false });
+	await expect(question).toBeVisible();
+	await expect(answer).toBeHidden();
+	await question.click();
+	await expect(answer).toBeVisible();
+	await question.click();
+	await expect(answer).toBeHidden();
 });

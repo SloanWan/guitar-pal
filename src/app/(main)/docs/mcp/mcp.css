@@ -1,14 +1,16 @@
 /* /docs/mcp (#486): the URL card, the client picker over the chosen client's card, the
-   models, the requests to try. Scoped under .mcp-page; the prose sizes are the grammar
-   page's (doc.css), so the two docs read alike. Monospace only for what is
-   copied or typed. */
+   models, the requests to try. Scoped under .mcp-page; the prose sizes and the
+   column (the outline beside it from 960px, a 72ch measure) are the other
+   document pages' (doc.css), so the docs read alike. Monospace only for what
+   is typed into a terminal or a config file. */
 
 .mcp-page {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: 2.5rem;
-	max-width: 44rem;
-	margin-inline: auto;
+	min-width: 0;
+	max-width: 72ch;
 	font-family: var(--gp-f-body);
 	font-size: var(--gp-t-body);
 	line-height: var(--gp-lh-body);
@@ -56,14 +58,18 @@
 	overflow-wrap: anywhere;
 }
 
-/* The language switch sits at the title's end, wrapping under it when the
-   title needs the line. */
+/* The language switch stays level with the title's first line; a long title
+   wraps under itself rather than pushing the switch to a row of its own. */
 .mcp-title-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 0.75rem 1.5rem;
+	gap: 1rem;
+}
+
+.mcp-title-row > h1 {
+	flex: 1;
+	min-width: 0;
 }
 
 .mcp-lead {
@@ -86,18 +92,23 @@
 	background: var(--gp-card);
 }
 
+/* Every code block on the page — the URL, a client's snippet, a request — is a
+   grey block holding its copy key at its right edge. */
 .mcp-url-row {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	margin-top: 8px;
+	padding: 4px 4px 4px 12px;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 }
 
 .mcp-page .mcp-url-value {
 	flex: 1;
 	min-width: 0;
-	padding: 9px 12px;
-	border-radius: var(--gp-r-m);
+	padding: 6px 0;
+	background: none;
 	font-size: 14px;
 	white-space: nowrap;
 	overflow-x: auto;
@@ -172,17 +183,18 @@
 	grid-column: 2;
 	display: flex;
 	align-items: flex-start;
-	gap: 8px;
+	gap: 6px;
 	margin-top: 10px;
+	padding: 4px 4px 4px 0;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 }
 
 .mcp-snippet pre {
 	flex: 1;
 	min-width: 0;
 	margin: 0;
-	padding: 0.75rem 1rem;
-	border-radius: var(--gp-r-m);
-	background: var(--gp-well);
+	padding: calc(0.75rem - 4px) 0 calc(0.75rem - 4px) 1rem;
 	font-family: var(--gp-f-mono);
 	font-size: 13px;
 	line-height: 1.6;
@@ -207,6 +219,29 @@
 
 /* ---- which model, what to ask, what comes back ------------------------------------ */
 
+/* One card per thing to ask for: its heading, what to do besides asking, then
+   each request on a grey block in the typed-text face, the way a code block
+   reads in a document, so it is plainly something to paste. */
+.mcp-ask-group {
+	margin-top: 1rem;
+	padding: 18px 20px;
+	border-radius: var(--gp-r-l);
+	background: var(--gp-card);
+}
+
+.mcp-page h3 {
+	font-family: var(--gp-f-disp);
+	font-size: 17px;
+	font-weight: 650;
+	line-height: 1.3;
+	color: var(--gp-ink);
+	scroll-margin-top: 1rem;
+}
+
+.mcp-ask-group > .mcp-caption {
+	margin-top: 4px;
+}
+
 .mcp-asks {
 	display: flex;
 	flex-direction: column;
@@ -217,22 +252,46 @@
 .mcp-asks > li {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	padding: 12px 12px 12px 16px;
-	border-radius: var(--gp-r-l);
-	background: var(--gp-card);
+	gap: 6px;
+	padding: 4px 4px 4px 14px;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 }
 
-.mcp-ask-body {
+.mcp-page .mcp-ask-text {
 	flex: 1;
 	min-width: 0;
+	padding: 6px 0;
+	background: none;
+	font-family: var(--gp-f-mono), var(--gp-cjk);
+	font-size: 13.5px;
+	line-height: 1.55;
+	color: var(--gp-ink);
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
-.mcp-ask-body > .mcp-caption {
-	margin-bottom: 2px;
+.mcp-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--gp-r-s);
+	color: var(--gp-ink-3);
+	cursor: pointer;
+	transition:
+		color var(--gp-d-state) linear,
+		background-color var(--gp-d-state) linear;
 }
 
-.mcp-ask-text {
+.mcp-icon svg {
+	width: 17px;
+	height: 17px;
+}
+
+/* Copied: the tick stays inked until it turns back. */
+.mcp-icon[data-done] {
 	color: var(--gp-ink);
 }
 

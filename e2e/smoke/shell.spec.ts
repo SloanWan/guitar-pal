@@ -86,21 +86,23 @@ test("a first visit is light, and a saved dark is applied before paint", async (
 });
 
 /**
- * Installed on an iPad, the page reaches the top edge and the system's blurred bar lies
- * over it (#478). Standalone can't be emulated, so the inset is injected through the one
- * property the shell reads it from.
+ * Installed, the page reaches the top edge and the system's blurred bar lies over it (#478).
+ * Standalone can't be emulated, so the inset is injected through the one property the shell
+ * reads it from. Every header also keeps --gp-edge-blur above its content, inset or not.
  */
 test("the header grows by the top safe area and keeps its content below it", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/strum");
 	const header = page.locator("header.gp-header");
 	const before = await header.boundingBox();
-	await page.addStyleTag({ content: ":root { --gp-safe-top: 24px; }" });
+	// With no inset at all the content still keeps clear of the blur's reach (--gp-edge-blur).
+	expect((await page.getByRole("link", { name: /Guitar Pal/ }).first().boundingBox())?.y ?? 0).toBeGreaterThanOrEqual(16);
+	await page.addStyleTag({ content: ":root { --gp-inset-top: 24px; }" });
 
 	const after = await header.boundingBox();
 	expect(after?.height).toBeCloseTo((before?.height ?? 0) + 24, 0);
 	// The brand sits wholly below the inset, where nothing covers it.
 	const brand = await page.getByRole("link", { name: /Guitar Pal/ }).first().boundingBox();
-	expect(brand?.y ?? 0).toBeGreaterThanOrEqual(24);
+	expect(brand?.y ?? 0).toBeGreaterThanOrEqual(24 + 16);
 	// What follows the header moves down with it: nothing slides underneath.
 	const main = await page.locator("main").first().boundingBox();
 	expect(main?.y ?? 0).toBeGreaterThanOrEqual((after?.y ?? 0) + (after?.height ?? 0) - 1);
@@ -109,17 +111,18 @@ test("the header grows by the top safe area and keeps its content below it", { t
 /**
  * Padding alone leaves iPadOS's scroll edge blur over the header: WebKit skips it only when
  * a fixed element of one colour is hit 4px below the middle of the top edge, at least 90%
- * of the width and taller than 10px (#478). The edge band is that element, over the inset.
+ * of the width and taller than 10px (#478). The edge band is that element, over the top of the
+ * header: the inset and the blur's reach below it.
  */
 test("a fixed band in the header's colour covers the top inset", { tag: "@phone" }, async ({ page }) => {
 	await page.goto("/strum");
 	const band = page.locator(".gp-edge-band");
-	expect((await band.boundingBox())?.height ?? 0).toBe(0);
-	await page.addStyleTag({ content: ":root { --gp-safe-top: 24px; }" });
+	expect((await band.boundingBox())?.height ?? 0).toBe(16);
+	await page.addStyleTag({ content: ":root { --gp-inset-top: 24px; }" });
 
 	const box = await band.boundingBox();
 	const width = page.viewportSize()?.width ?? 0;
-	expect(box).toEqual({ x: 0, y: 0, width, height: 24 });
+	expect(box).toEqual({ x: 0, y: 0, width, height: 24 + 16 });
 	const sampled = await page.evaluate(() => {
 		const hit = document.elementFromPoint(innerWidth / 2, 4);
 		const header = document.querySelector("header.gp-header");

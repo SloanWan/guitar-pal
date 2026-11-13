@@ -92,18 +92,23 @@
 	background: var(--gp-card);
 }
 
+/* Every code block on the page — the URL, a client's snippet, a request — is a
+   grey block holding its copy key at its right edge. */
 .mcp-url-row {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	margin-top: 8px;
+	padding: 4px 4px 4px 12px;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 }
 
 .mcp-page .mcp-url-value {
 	flex: 1;
 	min-width: 0;
-	padding: 9px 12px;
-	border-radius: var(--gp-r-m);
+	padding: 6px 0;
+	background: none;
 	font-size: 14px;
 	white-space: nowrap;
 	overflow-x: auto;
@@ -178,17 +183,18 @@
 	grid-column: 2;
 	display: flex;
 	align-items: flex-start;
-	gap: 8px;
+	gap: 6px;
 	margin-top: 10px;
+	padding: 4px 4px 4px 0;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-well);
 }
 
 .mcp-snippet pre {
 	flex: 1;
 	min-width: 0;
 	margin: 0;
-	padding: 0.75rem 1rem;
-	border-radius: var(--gp-r-m);
-	background: var(--gp-well);
+	padding: calc(0.75rem - 4px) 0 calc(0.75rem - 4px) 1rem;
 	font-family: var(--gp-f-mono);
 	font-size: 13px;
 	line-height: 1.6;
@@ -215,8 +221,7 @@
 
 /* One card per thing to ask for: its heading, what to do besides asking, then
    each request on a grey block in the typed-text face, the way a code block
-   reads in a document, so it is plainly something to paste. The copy key is a
-   bare icon, the Strum header's kind (.st-icon). */
+   reads in a document, so it is plainly something to paste. */
 .mcp-ask-group {
 	margin-top: 1rem;
 	padding: 18px 20px;
@@ -285,34 +290,9 @@
 	height: 17px;
 }
 
-/* On the grey block, the hover face is the card's colour, not the block's own. */
-.mcp-icon:hover {
-	background: var(--gp-card);
-	color: var(--gp-ink);
-}
-
+/* Copied: the tick stays inked until it turns back. */
 .mcp-icon[data-done] {
 	color: var(--gp-ink);
-}
-
-.mcp-icon[data-done] svg {
-	animation: mcp-tick var(--gp-d-pop) var(--gp-spring-tab);
-}
-
-@keyframes mcp-tick {
-	from {
-		transform: scale(0.4);
-		opacity: 0;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.mcp-icon {
-		transition: none;
-	}
-	.mcp-icon[data-done] svg {
-		animation: none;
-	}
 }
 
 .mcp-list {

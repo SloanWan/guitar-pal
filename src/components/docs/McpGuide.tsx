@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Segmented } from "@/components/ui/segmented";
 import { TEXT_LINK } from "@/components/auth/formText";
+import "@/components/playback/icons.css";
 import DocLangSwitch from "@/components/docs/DocLangSwitch";
 import DocToc from "@/components/docs/DocToc";
 import { MCP_GUIDE_COPY, MCP_REFERENCE_URL, type McpGuideCopy } from "@/components/docs/mcpGuideCopy";
@@ -29,21 +29,11 @@ function Inline({ text }: { text: string }) {
 }
 
 /**
- * `plain` is a bare icon, the Strum header's kind: no face until the pointer
- * is over it, a tick that pops in once copied. The URL and the config
- * snippets keep the raised icon button beside their fields.
+ * The copy key inside a code block: a bare icon, the Strum header's kind, that
+ * hops on hover (`data-anim="copy"` in playback/icons.css) and turns to a tick
+ * once copied.
  */
-function CopyButton({
-	text,
-	label,
-	copy,
-	plain = false,
-}: {
-	text: string;
-	label: string;
-	copy: McpGuideCopy;
-	plain?: boolean;
-}) {
+function CopyButton({ text, label, copy }: { text: string; label: string; copy: McpGuideCopy }) {
 	const [done, setDone] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 	useEffect(() => () => clearTimeout(timer.current), []);
@@ -61,24 +51,18 @@ function CopyButton({
 		timer.current = setTimeout(() => setDone(false), COPIED_MS);
 	};
 
-	if (plain) {
-		return (
-			<button
-				type="button"
-				className="mcp-icon gp-focus"
-				aria-label={label}
-				title={label}
-				onClick={onClick}
-				data-done={done || undefined}
-			>
-				{done ? <Check aria-hidden /> : <Copy aria-hidden />}
-			</button>
-		);
-	}
 	return (
-		<Button variant="icon" size="xs" aria-label={label} onClick={onClick}>
+		<button
+			type="button"
+			className="mcp-icon gp-focus"
+			data-anim="copy"
+			aria-label={label}
+			title={label}
+			onClick={onClick}
+			data-done={done || undefined}
+		>
 			{done ? <Check aria-hidden /> : <Copy aria-hidden />}
-		</Button>
+		</button>
 	);
 }
 
@@ -185,7 +169,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 								{group.requests.map((request) => (
 									<li key={request}>
 										<code className="mcp-ask-text">{request}</code>
-										<CopyButton text={request} label={copy.copy(copy.askName)} copy={copy} plain />
+										<CopyButton text={request} label={copy.copy(copy.askName)} copy={copy} />
 									</li>
 								))}
 							</ul>

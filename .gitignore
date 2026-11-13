@@ -52,5 +52,8 @@ next-env.d.ts
 # scratch / temp reports (not committed)
 .tmp/
 
-# MCP quality eval transcripts (src/lib/mcp/__evals__/quality/eval.mts)
+# MCP quality eval transcripts (src/lib/mcp/__evals__/quality/run.ts)
 src/lib/mcp/__evals__/quality/runs/
+
+# The OpenAI plugin ZIP (scripts/build-openai-plugin.mjs)
+dist/

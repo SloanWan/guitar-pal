@@ -112,6 +112,9 @@ when they should and not otherwise (`MCP_EVAL_LABEL=<label> npm run evals --
 src/lib/mcp`, results in `routing-results.json`); `__evals__/quality/run.ts`
 scores what they write.
 
+Directory listings: the copy, icons, test cases and per-platform files are in
+[`docs/listing/`](listing/README.md).
+
 Running your own: beyond the app's env, set `SUPABASE_SERVICE_ROLE_KEY` and
 `MCP_SHARE_OWNER_ID` (the account shares are written as), optionally
 `MCP_DAILY_SHARES` (default 500) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps

@@ -94,7 +94,9 @@ image), `read_share` (a link back as text). Everything passes the app's own
 validators before a link is made; the model writes notation, never audio or raw
 pitches. The server is Streamable HTTP, stateless, JSON responses, no auth.
 Calls and new links are rate-limited per IP; over a limit the tool returns a
-message instead of a link.
+message instead of a link. claude.ai calls from Anthropic's published egress
+ranges on behalf of all its users, so those ranges share one larger bucket
+(`src/lib/mcp/callers.ts`); the daily budget caps everyone together.
 
 Tool annotations, and why:
 
@@ -112,7 +114,7 @@ scores what they write.
 
 Running your own: beyond the app's env, set `SUPABASE_SERVICE_ROLE_KEY` and
 `MCP_SHARE_OWNER_ID` (the account shares are written as), optionally
-`MCP_DAILY_SHARES` (default 200) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps
+`MCP_DAILY_SHARES` (default 500) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps
 links forever), and run `scripts/add-shared-items-expiry.sql` once before
 deploying. Locally:
 

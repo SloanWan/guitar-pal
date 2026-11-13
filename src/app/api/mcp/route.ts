@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { createClient } from "@supabase/supabase-js";
 import { SlidingWindowLimiter } from "@/lib/assistant/rateLimit";
 import { getChordIndex } from "@/lib/chordsData";
+import { callerKey, type CallerKey } from "@/lib/mcp/callers";
 import { createGuitarPalServer, ShareRefused, type GuitarPalMcpDeps, type SavedShare } from "@/lib/mcp/server";
 import { createShare, loadShare, newShareId, type SharedItem } from "@/lib/sharedItems";
 
@@ -15,12 +16,15 @@ import { createShare, loadShare, newShareId, type SharedItem } from "@/lib/share
  * is told there is none.
  *
  * Abuse controls, in the shape `/api/assistant` uses for guests: a call has no
- * user, so the IP is the only key. Reading and listing are cheap and get a
- * loose hourly cap; a share is a row that lives `MCP_SHARE_TTL_DAYS`, so writes
- * get a tighter one per IP and a daily budget for everyone together
- * (`MCP_DAILY_SHARES`) — the number the worst case on one instance cannot
- * exceed. The validators run before any write, so what the budget bounds is
- * playable tabs, not arbitrary payloads.
+ * user, so the address is the only key (`callerKey`). Reading and listing are
+ * cheap and get a loose hourly cap; a share is a row that lives
+ * `MCP_SHARE_TTL_DAYS`, so writes get a tighter one per address and a daily
+ * budget for everyone together (`MCP_DAILY_SHARES`) — the number the worst case
+ * on one instance cannot exceed. A hosted client (claude.ai) calls from its
+ * vendor's few egress addresses on behalf of all its players, so it gets one
+ * bucket sized for many (#491) and the daily budget still caps it. The
+ * validators run before any write, so what the budget bounds is playable tabs,
+ * not arbitrary payloads.
  *
  * Shares are written with the service role under one account
  * (`MCP_SHARE_OWNER_ID`): `shared_items` insert is owner-scoped under RLS and
@@ -32,12 +36,19 @@ export const dynamic = "force-dynamic";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-/** Any call, per IP: a conversation is a handful an hour, a script is not. */
+/** Any call, per address: a conversation is a handful an hour, a script is not. */
 const callLimiter = new SlidingWindowLimiter({ limit: 120, windowMs: HOUR_MS });
-/** Shares written, per IP. */
+/** Shares written, per address. */
 const shareIpLimiter = new SlidingWindowLimiter({ limit: 20, windowMs: HOUR_MS });
-/** Shares written, everyone, per day. */
-const DAILY_SHARES = Number(process.env.MCP_DAILY_SHARES) || 200;
+/** The same two for a hosted client's one bucket: every one of its players at once. */
+const hostedCallLimiter = new SlidingWindowLimiter({ limit: 3000, windowMs: HOUR_MS });
+const hostedShareLimiter = new SlidingWindowLimiter({ limit: 300, windowMs: HOUR_MS });
+/**
+ * Shares written, everyone, per day. 500 rows of a few kB each, living 30 days,
+ * is some 15,000 rows at most: small for the database, and room for a listed
+ * connector's players before the cap answers.
+ */
+const DAILY_SHARES = Number(process.env.MCP_DAILY_SHARES) || 500;
 const shareBudget = new SlidingWindowLimiter({ limit: DAILY_SHARES, windowMs: DAY_MS });
 /** A tab of MAX_MEASURES bars as JSON is well under this; a body past it was not written by a model. */
 const MAX_BODY_BYTES = 512 * 1024;
@@ -48,13 +59,6 @@ export function shareTtlDays(env: NodeJS.ProcessEnv = process.env): number {
 	if (raw === undefined || raw.trim() === "") return 30;
 	const days = Number(raw);
 	return Number.isFinite(days) && days >= 0 ? days : 30;
-}
-
-/** The first hop of `x-forwarded-for`, which the platform in front sets; one shared bucket without a proxy, which errs safe. */
-function clientIp(request: Request): string {
-	const forwarded = request.headers.get("x-forwarded-for");
-	const first = forwarded?.split(",")[0]?.trim();
-	return first || request.headers.get("x-real-ip") || "unknown";
 }
 
 /** The origin the player reaches the site at, for the links in tool results. */
@@ -75,8 +79,7 @@ function adminClient() {
 	});
 }
 
-function depsFor(request: Request): GuitarPalMcpDeps {
-	const ip = clientIp(request);
+function depsFor(request: Request, caller: CallerKey): GuitarPalMcpDeps {
 	return {
 		chordIndex: getChordIndex,
 		origin: requestOrigin(request),
@@ -94,7 +97,7 @@ function depsFor(request: Request): GuitarPalMcpDeps {
 				console.error("[mcp] SUPABASE_SERVICE_ROLE_KEY or MCP_SHARE_OWNER_ID is unset; shares cannot be written");
 				throw new ShareRefused("This Guitar Pal server is not set up to save links yet, so no link was made.");
 			}
-			const perIp = shareIpLimiter.check(ip);
+			const perIp = (caller.hosted ? hostedShareLimiter : shareIpLimiter).check(caller.key);
 			if (!perIp.allowed) {
 				throw new ShareRefused(`Too many links from here in the last hour; try again in ${Math.ceil(perIp.retryAfterSeconds / 60)} minutes. No link was made.`);
 			}
@@ -112,11 +115,12 @@ function depsFor(request: Request): GuitarPalMcpDeps {
 }
 
 export async function POST(request: Request): Promise<Response> {
-	const verdict = callLimiter.check(clientIp(request));
+	const caller = callerKey(request.headers);
+	const verdict = (caller.hosted ? hostedCallLimiter : callLimiter).check(caller.key);
 	if (!verdict.allowed) {
 		return rpcError(429, -32000, "Too many requests; try again later.", { "Retry-After": String(verdict.retryAfterSeconds) });
 	}
-	const server = createGuitarPalServer(depsFor(request));
+	const server = createGuitarPalServer(depsFor(request, caller));
 	const transport = new WebStandardStreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,

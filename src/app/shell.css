@@ -17,9 +17,16 @@
    the width and taller than 10px, then fills the system's area with its colour. The edge
    band (.gp-edge-band, first in <body>) is that element, in the header's colour, over the
    inset only, so it is 0 tall wherever the inset is.
+
+   On an installed iPad the blur still reaches below the status bar, past the band, into the
+   top of the header. There --gp-edge-blur adds that much to the inset: the band, the header's
+   padding and every panel that clears the inset grow by it, so the header's content sits
+   centred below the blur rather than the header growing around it. Only iOS (the touch
+   callout is WebKit-on-iOS only), only installed, only from 720px; 0 everywhere else.
    ===================================================================================== */
 :root {
-	--gp-safe-top: env(safe-area-inset-top, 0px);
+	--gp-edge-blur: 0px;
+	--gp-safe-top: calc(env(safe-area-inset-top, 0px) + var(--gp-edge-blur));
 	--gp-header-h: calc(52px + var(--gp-safe-top));
 	--gp-tabbar-h: calc(62px + env(safe-area-inset-bottom));
 	/* everything the shell takes from the viewport's height */
@@ -29,6 +36,13 @@
 	:root {
 		--gp-header-h: calc(56px + var(--gp-safe-top));
 		--gp-tabbar-h: 0px;
+	}
+}
+@media (display-mode: standalone) and (min-width: 720px) {
+	@supports (-webkit-touch-callout: none) {
+		:root {
+			--gp-edge-blur: 16px;
+		}
 	}
 }
 /* With viewport-fit=cover a phone on its side lays the page under the notch:
@@ -371,7 +385,8 @@ body {
    image's mark, in the same place and size (LAUNCH_MARK_PX, centred), comes to life: the
    hand folds and fans open again as the resting pick lifts off and lands — the logo's
    arrival (pickMark.ts) in CSS, since it plays before React does. LaunchCurtain lifts it
-   once the page is ready; at 1.5 s it lifts itself. Under the edge band. */
+   once the page is ready and the mark has played through; at 1.5 s it lifts itself.
+   Under the edge band. */
 .gp-launch {
 	display: none;
 }

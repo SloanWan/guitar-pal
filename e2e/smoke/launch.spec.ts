@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 
 /**
  * The installed app's launch (#490): a launch image per iOS screen instead of black, then
- * the launch curtain until the page is ready. Standalone can't be emulated, so the curtain's
- * check is answered through matchMedia.
+ * the launch curtain until the page is ready and its mark has played. Standalone can't be
+ * emulated, so the curtain's check is answered through matchMedia.
  */
 
 test("every launch image the page names is there, at the size its media asks for", async ({ page, request }) => {
@@ -26,7 +26,7 @@ test("every launch image the page names is there, at the size its media asks for
 	}
 });
 
-test("the curtain shows on a cold start only, and lifts once the page is ready", async ({ page }) => {
+test("the curtain shows when the app is launched, and lifts once the page is ready and the mark has played", async ({ page }) => {
 	await page.addInitScript(() => {
 		const real = window.matchMedia.bind(window);
 		window.matchMedia = (query: string) =>
@@ -41,12 +41,19 @@ test("the curtain shows on a cold start only, and lifts once the page is ready",
 	});
 	const seen = () => page.evaluate(() => (window as unknown as { __launch: (string | null)[] }).__launch);
 
+	// A launch: a plain navigation no page of the site led to.
+	const start = Date.now();
 	await page.goto("/strum");
 	await expect.poll(seen).toEqual(["", "lifting", null]);
 	await expect(page.locator(".gp-launch")).toBeHidden();
+	// The mark plays through (~1 s) however fast the page was.
+	expect(Date.now() - start).toBeGreaterThan(900);
 
-	// The same session: no curtain again.
-	await page.goto("/tab");
+	// A full-page move inside the app is not a launch, nor is a reload.
+	await page.evaluate((url) => location.assign(url), new URL("/tab", page.url()).href);
+	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
+	expect(await seen()).toEqual([]);
+	await page.reload();
 	await expect(page.locator("svg .vf-stave").first()).toBeVisible();
 	expect(await seen()).toEqual([]);
 });

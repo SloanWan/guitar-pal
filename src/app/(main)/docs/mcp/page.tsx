@@ -28,7 +28,9 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
 export default async function McpDocPage({ searchParams }: { searchParams: SearchParams }) {
 	const lang = await resolveLang(searchParams);
 	return (
-		<div className={`mx-auto w-full max-w-300 py-8 max-sm:py-6 ${PAGE_GUTTER}`}>
+		<div
+			className={`gp-rise mx-auto flex w-full max-w-300 flex-col py-8 max-sm:py-6 min-[960px]:flex-row min-[960px]:gap-12 ${PAGE_GUTTER}`}
+		>
 			<McpGuide lang={lang} />
 		</div>
 	);

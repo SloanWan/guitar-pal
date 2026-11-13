@@ -27,6 +27,17 @@ test("the MCP page shows the URL and one client's setup at a time", { tag: "@pho
 	expect(overflow).toBeLessThanOrEqual(0);
 });
 
+/** Four things to ask for, each with requests to copy, and the outline beside them (#515). */
+test("the MCP page groups its requests by what they ask for", async ({ page }) => {
+	await page.goto("/docs/mcp?lang=en");
+	const ask = page.locator("section", { has: page.getByRole("heading", { name: "Try asking", level: 2 }) });
+	for (const heading of ["Write a fingerpicking tab", "Write a strumming pattern", "Read a tab from a picture", "Change or rearrange it"]) {
+		await expect(ask.getByRole("heading", { name: heading, level: 3 })).toBeVisible();
+	}
+	await expect(ask.getByRole("button", { name: "Copy the request" })).toHaveCount(12);
+	await expect(page.getByRole("navigation", { name: "On this page" }).first()).toBeAttached();
+});
+
 test("the MCP page reads in Chinese", async ({ page }) => {
 	await page.goto("/docs/mcp?lang=zh");
 	await expect(page.getByRole("heading", { name: "把 Guitar Pal 接入你的 AI", level: 1 })).toBeVisible();

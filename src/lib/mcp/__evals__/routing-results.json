@@ -1,0 +1,537 @@
+{
+	"before": {
+		"at": "2026-11-12T17:46:31.572Z",
+		"models": {
+			"claude-haiku-5-5": {
+				"runs": 3,
+				"cases": {
+					"direct-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"direct-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"direct-image": [
+						null,
+						"import_tab",
+						null
+					],
+					"direct-read": [
+						"read_share",
+						"read_share",
+						"read_share"
+					],
+					"direct-zh": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-image": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-riff": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-zh": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-progression": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"negative-theory": [
+						null,
+						null,
+						null
+					],
+					"negative-gear": [
+						null,
+						null,
+						null
+					],
+					"negative-fingering": [
+						null,
+						null,
+						null
+					],
+					"negative-lyrics": [
+						null,
+						null,
+						null
+					],
+					"negative-history": [
+						null,
+						null,
+						null
+					],
+					"negative-image-question": [
+						null,
+						null,
+						null
+					]
+				},
+				"recall": {
+					"direct": {
+						"hit": 13,
+						"of": 15
+					},
+					"indirect": {
+						"hit": 15,
+						"of": 18
+					}
+				},
+				"falseCalls": {
+					"hit": 0,
+					"of": 18
+				},
+				"costUsd": 0.04063515
+			},
+			"claude-sonnet-5-5": {
+				"runs": 3,
+				"cases": {
+					"direct-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"direct-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"direct-image": [
+						null,
+						null,
+						null
+					],
+					"direct-read": [
+						"read_share",
+						"read_share",
+						"read_share"
+					],
+					"direct-zh": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-image": [
+						"import_tab",
+						null,
+						null
+					],
+					"indirect-riff": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-zh": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-progression": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"negative-theory": [
+						null,
+						null,
+						null
+					],
+					"negative-gear": [
+						null,
+						null,
+						null
+					],
+					"negative-fingering": [
+						null,
+						null,
+						null
+					],
+					"negative-lyrics": [
+						null,
+						null,
+						null
+					],
+					"negative-history": [
+						null,
+						null,
+						null
+					],
+					"negative-image-question": [
+						null,
+						null,
+						null
+					]
+				},
+				"recall": {
+					"direct": {
+						"hit": 12,
+						"of": 15
+					},
+					"indirect": {
+						"hit": 16,
+						"of": 18
+					}
+				},
+				"falseCalls": {
+					"hit": 0,
+					"of": 18
+				},
+				"costUsd": 0.704153
+			},
+			"claude-opus-5-5": {
+				"runs": 3,
+				"cases": {
+					"direct-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"direct-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"direct-image": [
+						"import_tab",
+						"import_tab",
+						"import_tab"
+					],
+					"direct-read": [
+						"read_share",
+						"read_share",
+						"read_share"
+					],
+					"direct-zh": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-image": [
+						"import_tab",
+						"import_tab",
+						"import_tab"
+					],
+					"indirect-riff": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-zh": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-progression": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"negative-theory": [
+						null,
+						null,
+						null
+					],
+					"negative-gear": [
+						null,
+						null,
+						null
+					],
+					"negative-fingering": [
+						null,
+						"propose_tab",
+						null
+					],
+					"negative-lyrics": [
+						null,
+						null,
+						null
+					],
+					"negative-history": [
+						null,
+						null,
+						null
+					],
+					"negative-image-question": [
+						null,
+						null,
+						null
+					]
+				},
+				"recall": {
+					"direct": {
+						"hit": 15,
+						"of": 15
+					},
+					"indirect": {
+						"hit": 18,
+						"of": 18
+					}
+				},
+				"falseCalls": {
+					"hit": 1,
+					"of": 18
+				},
+				"costUsd": 1.2813460000000003
+			}
+		}
+	},
+	"after": {
+		"at": "2026-11-12T18:03:00.722Z",
+		"models": {
+			"claude-haiku-5-5": {
+				"runs": 3,
+				"cases": {
+					"direct-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"direct-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"direct-image": [
+						null,
+						null,
+						"import_tab"
+					],
+					"direct-read": [
+						"read_share",
+						"read_share",
+						"read_share"
+					],
+					"direct-zh": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-image": [
+						"propose_tab",
+						null,
+						null
+					],
+					"indirect-riff": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-zh": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-progression": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"negative-theory": [
+						null,
+						null,
+						null
+					],
+					"negative-gear": [
+						null,
+						null,
+						null
+					],
+					"negative-fingering": [
+						null,
+						null,
+						null
+					],
+					"negative-lyrics": [
+						null,
+						null,
+						null
+					],
+					"negative-history": [
+						null,
+						null,
+						null
+					],
+					"negative-image-question": [
+						null,
+						null,
+						null
+					]
+				},
+				"recall": {
+					"direct": {
+						"hit": 13,
+						"of": 15
+					},
+					"indirect": {
+						"hit": 15,
+						"of": 18
+					}
+				},
+				"falseCalls": {
+					"hit": 0,
+					"of": 18
+				},
+				"costUsd": 0.04486057499999998
+			},
+			"claude-sonnet-5-5": {
+				"runs": 3,
+				"cases": {
+					"direct-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"direct-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"direct-image": [
+						"import_tab",
+						null,
+						null
+					],
+					"direct-read": [
+						"read_share",
+						"read_share",
+						"read_share"
+					],
+					"direct-zh": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-strum": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"indirect-tab": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-image": [
+						"import_tab",
+						null,
+						null
+					],
+					"indirect-riff": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-zh": [
+						"propose_tab",
+						"propose_tab",
+						"propose_tab"
+					],
+					"indirect-progression": [
+						"propose_strum",
+						"propose_strum",
+						"propose_strum"
+					],
+					"negative-theory": [
+						null,
+						null,
+						null
+					],
+					"negative-gear": [
+						null,
+						null,
+						null
+					],
+					"negative-fingering": [
+						null,
+						null,
+						null
+					],
+					"negative-lyrics": [
+						null,
+						null,
+						null
+					],
+					"negative-history": [
+						null,
+						null,
+						null
+					],
+					"negative-image-question": [
+						null,
+						null,
+						null
+					]
+				},
+				"recall": {
+					"direct": {
+						"hit": 13,
+						"of": 15
+					},
+					"indirect": {
+						"hit": 16,
+						"of": 18
+					}
+				},
+				"falseCalls": {
+					"hit": 0,
+					"of": 18
+				},
+				"costUsd": 0.6958015
+			}
+		}
+	}
+}

@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+// Chinese text (#516): self-hosted, sliced by unicode-range; --gp-cjk names it. Two
+// static weights, not the variable font, whose slices are four times the size.
+import "@fontsource/chiron-goround-tc/400.css";
+import "@fontsource/chiron-goround-tc/700.css";
 import { Toaster } from "@/components/ui/sonner";
 import { NavProgressProvider, NavProgressBar } from "@/components/nav-progress";
 import NoFocusZoom from "@/components/NoFocusZoom";

@@ -160,7 +160,6 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 
 				<section aria-labelledby="mcp-ask">
 					<h2 id="mcp-ask">{copy.askHeading}</h2>
-					<p>{copy.askLead}</p>
 					{copy.askGroups.map((group) => (
 						<div key={group.id} className="mcp-ask-group">
 							<h3 id={group.id}>{group.heading}</h3>

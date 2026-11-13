@@ -43,7 +43,6 @@ export interface McpGuideCopy {
 	modelsHeading: string;
 	models: readonly string[];
 	askHeading: string;
-	askLead: string;
 	askName: string;
 	/** One group per thing the connector does, each with requests to copy. */
 	askGroups: readonly AskGroup[];
@@ -130,7 +129,6 @@ export const MCP_GUIDE_COPY: Record<DocLang, McpGuideCopy> = {
 			"Even Opus and Sonnet sometimes put a number on the neighbouring string when reading an image, so compare the result with the original.",
 		],
 		askHeading: "Try asking",
-		askLead: "Name Guitar Pal in the request; ChatGPT in particular may not use it otherwise.",
 		askName: "request",
 		askGroups: [
 			{
@@ -254,7 +252,6 @@ export const MCP_GUIDE_COPY: Record<DocLang, McpGuideCopy> = {
 			"Opus 和 Sonnet 读图也偶尔会把数字写到相邻的弦上，记得对照原谱检查。",
 		],
 		askHeading: "可以这样问",
-		askLead: "在请求里点名 Guitar Pal，尤其是 ChatGPT，不点名它可能不会用。",
 		askName: "这句",
 		askGroups: [
 			{

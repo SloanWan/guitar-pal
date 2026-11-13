@@ -107,6 +107,16 @@ function userContent(c: RoutingCase): Anthropic.ContentBlockParam[] {
 	return parts;
 }
 
+/** The results file so far, or nothing yet; read once, not checked first. */
+function readResults(): ResultsFile {
+	try {
+		return JSON.parse(readFileSync(RESULTS, "utf8")) as ResultsFile;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+		throw error;
+	}
+}
+
 const runnable = ROUTING_CASES.filter((c) => !c.image || existsSync(path.join(ROOT, c.image)));
 const skipped = ROUTING_CASES.filter((c) => !runnable.includes(c));
 
@@ -121,7 +131,7 @@ describe.skipIf(!process.env.ANTHROPIC_API_KEY || LABEL === "")("MCP routing", (
 	});
 
 	afterAll(() => {
-		const file: ResultsFile = existsSync(RESULTS) ? (JSON.parse(readFileSync(RESULTS, "utf8")) as ResultsFile) : {};
+		const file = readResults();
 		file[LABEL] = { at: new Date().toISOString(), models: { ...(file[LABEL]?.models ?? {}), ...results } };
 		writeFileSync(RESULTS, `${JSON.stringify(file, null, "\t")}\n`);
 		for (const [model, r] of Object.entries(results)) {

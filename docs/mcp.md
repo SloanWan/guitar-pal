@@ -1,109 +1,122 @@
 # Guitar Pal MCP server
 
-Compose in your AI assistant, play in Guitar Pal. The site exposes an
-[MCP](https://modelcontextprotocol.io) server at `/api/mcp`: connect it to any
-MCP client — claude.ai, Claude Desktop, Claude Code, Cursor, VS Code, ChatGPT,
-your own agent — ask for a strumming pattern or a fingerpicking tab, and what
-the model writes comes back as a link that opens in the full player. No account
-is needed to connect or to open a link.
+Ask Claude or ChatGPT for a strumming pattern or a fingerpicking tab, or show it
+a photo of a tab, and get back a link that plays it in Guitar Pal.
 
-MCP is an open protocol, not tied to one vendor. This server speaks the current
-Streamable HTTP transport, stateless, with JSON responses and no authentication,
-which is the most widely supported combination. What differs between clients is
-the model behind them: `import_tab` asks for a fairly detailed structure, and
-reading a screenshot needs a model that can see images.
+Server URL: `https://guitarpal.sloanwan.com/api/mcp` — no account, no API key.
+
+The same guide, in English and Chinese with every snippet ready to copy:
+[guitarpal.sloanwan.com/docs/mcp](https://guitarpal.sloanwan.com/docs/mcp).
 
 ## Connect
 
-The URL is `https://guitarpal.sloanwan.com/api/mcp`. The quick version of this
-section, with every snippet ready to copy, is a page on the site:
-[guitarpal.sloanwan.com/docs/mcp](https://guitarpal.sloanwan.com/docs/mcp).
+### Claude (claude.ai, desktop and mobile apps)
 
-- **claude.ai / Claude Desktop:** Settings → Connectors → Add custom connector,
-  paste the URL. No authentication.
-- **Claude Code:** `claude mcp add --transport http guitar-pal https://guitarpal.sloanwan.com/api/mcp`
-- **Cursor** (`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project):
+Works on every Claude plan; the Free plan allows one custom connector.
 
-  ```json
-  { "mcpServers": { "guitar-pal": { "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
-  ```
+1. **Customize → Connectors → + Add → Add custom connector.**
+2. Name it `Guitar Pal`, paste the URL, choose **No sign-in**, and add it.
+3. In a chat, turn it on from **+ → Connectors** in the message box.
 
-- **VS Code** (`.vscode/mcp.json`):
+A connector added on the web also shows up in the desktop and mobile apps.
 
-  ```json
-  { "servers": { "guitar-pal": { "type": "http", "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
-  ```
+### ChatGPT (web, desktop and mobile apps)
 
-- **ChatGPT and other chat products:** add it where the product takes a remote
-  MCP server (connectors / developer mode). Some products insist on OAuth for
-  remote servers; this one has none, so it may be refused there.
-- **Anything else:** point it at the URL as a Streamable HTTP server. POST every
-  request; there is no session, no SSE stream and no `initialize` handshake to
-  keep alive. Clients that only speak the older SSE transport, or only launch
-  stdio servers, need a bridge such as `mcp-remote`.
+Needs ChatGPT Plus or a higher plan; Free accounts cannot add it.
 
-## What to ask
+1. On the web, open [chatgpt.com/plugins](https://chatgpt.com/plugins), press
+   **+ → Add custom MCP server**.
+2. Name it `Guitar Pal`, paste the URL, choose **No authentication**.
+3. Tick **I understand and want to continue**, press **Create as a plugin**.
+4. In a new chat, type **@** and pick Guitar Pal.
 
-> A slow 6/8 fingerpicking pattern over Am–F–C–G, thumb on the bass.
+Adding works on the web only; once added, it works in the apps too. ChatGPT
+asks once per chat before the first call that creates a link.
 
-> Strum pattern for a campfire song, C G Am F, 90 bpm.
+### Claude Code
 
-> *(with a photo of a tab)* Bring this into Guitar Pal.
-
-> Make bar 2 of https://guitarpal.sloanwan.com/p/aB3xK9mQ2z simpler.
-
-Each answer carries a link like `https://guitarpal.sloanwan.com/p/aB3xK9mQ2z`.
-The page is the player: play, loop a section, change the tempo. **Import**
-copies the pattern into your own library (locally as a guest, to your account
-when signed in), where the editor is. A link is a snapshot — every revision is
-a new link — and links made here stop opening after 30 days.
-
-## Tools
-
-| tool | what the model gives it | what checks it |
-|---|---|---|
-| `propose_strum` | one bar of rhythm in the app's notation (`D DU UD `), chord names one per bar, tempo, capo | the same builder the in-app assistant uses; every chord is looked up in the library |
-| `propose_tab` | notes on a grid of even slots per bar (`{string, fret, slot}`, 1 = high e, plus a `link`, an `effects` map and `palmMute` / `letRing` flags from the technique registry), per-bar `hits`, meter, tempo | the same builder the in-app assistant uses, then the import validator |
-| `import_tab` | bars of slots, each with its printed note value, an optional `hit`, and the notes as `{string, fret}` (1 = high e) with the same marks | the same validator the book import uses, plus a check that no bar overflows its meter |
-| `read_share` | a link or its id | reads the share back as text, and as `import_tab` bars for a tab |
-
-`import_tab` is for a tab the model read off an image or a printed page, where
-the rhythm is written and should not be re-guessed from spacing. The model reads
-the image; the server never sees it. What the validator cannot know is whether a
-note sits on the right string — a wrong string is still a legal fret — so the
-tool asks the model to list the places it was unsure of, and writes them under
-the pattern's name on the page. Check those against the original.
-
-Nothing is stored that did not pass the validators. The model never writes
-frets or MIDI directly into the app: it writes notation, and the app decides
-what it amounts to.
-
-## Limits
-
-Per IP: 120 calls and 20 new links an hour. All callers together: 200 new links
-a day (`MCP_DAILY_SHARES`). Over a limit, the tool answers with a message the
-model relays and offers the pattern as text instead.
-
-## Running your own
-
-The route needs, beyond the app's own env:
-
-```
-SUPABASE_SERVICE_ROLE_KEY=   # shared_items insert is owner-scoped; the server writes as one account
-MCP_SHARE_OWNER_ID=          # that account's auth.users id — create a user for it
-# MCP_DAILY_SHARES=200
-# MCP_SHARE_TTL_DAYS=30      # 0 keeps links forever
+```sh
+claude mcp add --transport http guitar-pal https://guitarpal.sloanwan.com/api/mcp
 ```
 
-and `scripts/add-shared-items-expiry.sql` run once, which adds
-`shared_items.expires_at` and gives the cleanup statement. **Run the SQL before
-deploying this code:** `loadShare` selects the column, so every `/p/<id>` page —
-not only the MCP — fails until it exists. With either required variable unset,
-the tools still list and validate; saving answers with a refusal that says the
-server is not set up for it.
+### Cursor
 
-Locally: `npm run dev`, then connect `http://localhost:3000/api/mcp`, or drive
-it by hand:
+`~/.cursor/mcp.json`, or `.cursor/mcp.json` in a project:
+
+```json
+{ "mcpServers": { "guitar-pal": { "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
+```
+
+### VS Code
+
+`.vscode/mcp.json`:
+
+```json
+{ "servers": { "guitar-pal": { "type": "http", "url": "https://guitarpal.sloanwan.com/api/mcp" } } }
+```
+
+## Which model
+
+- **Claude:** any current model writes strumming patterns and tabs well. To
+  read a tab image, use Opus or Sonnet; Haiku gets about half the notes wrong.
+- **ChatGPT:** avoid Instant — it transcribes poorly or skips the tool. Use a
+  Thinking model at medium effort or above.
+
+Even Opus and Sonnet sometimes put a number on the neighbouring string when
+reading an image, so compare the result with the original.
+
+## Try it
+
+Name Guitar Pal in the request; ChatGPT in particular may not use it otherwise.
+
+| to | ask |
+|---|---|
+| write a fingerpicking tab | *Use Guitar Pal to write a slow 6/8 fingerpicking pattern over Am–F–C–G, thumb on the bass.* |
+| write a strumming pattern | *Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm.* |
+| read a tab image | *(attach a photo or screenshot of a tab)* *Bring this tab into Guitar Pal.* |
+| change a link | *Make bar 2 of https://guitarpal.sloanwan.com/p/aB3xK9mQ2z simpler.* |
+
+## What you get back
+
+A link like `https://guitarpal.sloanwan.com/p/aB3xK9mQ2z` that opens in the
+player: play, loop, change the tempo. **Import** copies it into your library
+(in the browser as a guest, to your account when signed in) to edit it.
+
+- Each change makes a new link; links stop working after 30 days.
+- When reading an image, the model lists the notes it was unsure of under the
+  title. Check those against the original.
+
+## For developers
+
+Tools: `propose_strum` (rhythm notation + chords), `propose_tab` (notes on a slot
+grid), `import_tab` (bars with written note values, for a tab read off an
+image), `read_share` (a link back as text). Everything passes the app's own
+validators before a link is made; the model writes notation, never audio or raw
+pitches. The server is Streamable HTTP, stateless, JSON responses, no auth.
+Calls and new links are rate-limited per IP; over a limit the tool returns a
+message instead of a link. claude.ai calls from Anthropic's published egress
+ranges on behalf of all its users, so those ranges share one larger bucket
+(`src/lib/mcp/callers.ts`); the daily budget caps everyone together.
+
+Tool annotations, and why:
+
+| tool | readOnly | destructive | openWorld | why |
+|---|---|---|---|---|
+| `propose_strum`, `propose_tab`, `import_tab` | false | false | true | each call saves a new share; nothing existing is changed or removed; the share is a public link, so the call publishes |
+| `read_share` | true | false | false | reads a share by id and writes nothing; only Guitar Pal's own shares |
+
+The write tools' descriptions say the same in words: a new public `/p/<id>`
+snapshot, open to anyone with the link, expiring after `MCP_SHARE_TTL_DAYS`.
+`src/lib/mcp/__evals__/routing.eval.ts` checks whether models call the tools
+when they should and not otherwise (`MCP_EVAL_LABEL=<label> npm run evals --
+src/lib/mcp`, results in `routing-results.json`); `__evals__/quality/run.ts`
+scores what they write.
+
+Running your own: beyond the app's env, set `SUPABASE_SERVICE_ROLE_KEY` and
+`MCP_SHARE_OWNER_ID` (the account shares are written as), optionally
+`MCP_DAILY_SHARES` (default 500) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps
+links forever), and run `scripts/add-shared-items-expiry.sql` once before
+deploying. Locally:
 
 ```sh
 curl -s http://localhost:3000/api/mcp \

@@ -9,25 +9,24 @@ export const MCP_URL = "https://guitarpal.sloanwan.com/api/mcp";
 /** The name the server is registered under in a client's config. */
 export const MCP_SERVER_NAME = "guitar-pal";
 
-export type ConnectClient = "claude" | "claudeCode" | "cursor" | "vscode" | "other";
+export type ConnectClient = "claude" | "chatgpt" | "claudeCode" | "cursor" | "vscode";
 
 /** In the order the page's picker lists them. */
-export const CONNECT_CLIENTS: readonly ConnectClient[] = ["claude", "claudeCode", "cursor", "vscode", "other"];
+export const CONNECT_CLIENTS: readonly ConnectClient[] = ["claude", "chatgpt", "claudeCode", "cursor", "vscode"];
 
 const json = (value: unknown): string => JSON.stringify(value, null, 2);
 
 /**
- * The text to copy for each client: claude.ai takes the bare URL in a form,
- * Claude Code a command, Cursor and VS Code a config file (their keys differ),
- * and "other" the `mcp-remote` bridge for a client that only launches local
- * servers.
+ * The text to copy for each client: claude.ai and ChatGPT take the bare URL
+ * in a form, Claude Code a command, Cursor and VS Code a config file (their
+ * keys differ).
  */
 export function connectSnippets(url: string = MCP_URL): Record<ConnectClient, string> {
 	return {
 		claude: url,
+		chatgpt: url,
 		claudeCode: `claude mcp add --transport http ${MCP_SERVER_NAME} ${url}`,
 		cursor: json({ mcpServers: { [MCP_SERVER_NAME]: { url } } }),
 		vscode: json({ servers: { [MCP_SERVER_NAME]: { type: "http", url } } }),
-		other: json({ mcpServers: { [MCP_SERVER_NAME]: { command: "npx", args: ["-y", "mcp-remote", url] } } }),
 	};
 }

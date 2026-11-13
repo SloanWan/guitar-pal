@@ -17,6 +17,15 @@ export interface ClientGuide {
 	note?: string;
 }
 
+export interface AskGroup {
+	/** The heading's id, for the outline. */
+	id: string;
+	heading: string;
+	/** What to do besides asking (attach a picture, ask in the same chat); not copied. */
+	note?: string;
+	requests: readonly string[];
+}
+
 export interface McpGuideCopy {
 	title: string;
 	description: string;
@@ -34,10 +43,11 @@ export interface McpGuideCopy {
 	modelsHeading: string;
 	models: readonly string[];
 	askHeading: string;
-	askLead: string;
 	askName: string;
-	/** `hint` is what the request is for, written above it, not copied. */
-	asks: readonly { text: string; hint?: string }[];
+	/** One group per thing the connector does, each with requests to copy. */
+	askGroups: readonly AskGroup[];
+	/** The outline's label. */
+	tocLabel: string;
 	backHeading: string;
 	back: readonly string[];
 	referenceLead: string;
@@ -119,23 +129,54 @@ export const MCP_GUIDE_COPY: Record<DocLang, McpGuideCopy> = {
 			"Even Opus and Sonnet sometimes put a number on the neighbouring string when reading an image, so compare the result with the original.",
 		],
 		askHeading: "Try asking",
-		askLead: "Name Guitar Pal in the request; ChatGPT in particular may not use it otherwise.",
 		askName: "request",
-		asks: [
+		askGroups: [
 			{
-				text: "Use Guitar Pal to write a slow 6/8 fingerpicking pattern over Am–F–C–G, thumb on the bass.",
-				hint: "Write a fingerpicking tab",
+				id: "ask-tab",
+				heading: "Write a fingerpicking tab",
+				requests: [
+					"Use Guitar Pal to write a slow 6/8 fingerpicking pattern over Am–F–C–G, thumb on the bass.",
+					"Write a Travis picking exercise in G with Guitar Pal, at 80 bpm.",
+					"Use Guitar Pal to write a short riff in E minor with a hammer-on and a slide.",
+				],
 			},
-			{ text: "Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm.", hint: "Write a strumming pattern" },
-			{ text: "Bring this tab into Guitar Pal.", hint: "Read a tab image — attach a photo or screenshot" },
-			{ text: "Make bar 2 of that Guitar Pal tab simpler.", hint: "Change it — after you got a link" },
+			{
+				id: "ask-strum",
+				heading: "Write a strumming pattern",
+				requests: [
+					"Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm.",
+					"Use Guitar Pal to write a sixteenth-note funk strum with muted chucks over E9, at 100 bpm.",
+					"Give me an easy Guitar Pal strum for G D Em C with a capo on 2.",
+				],
+			},
+			{
+				id: "ask-image",
+				heading: "Read a tab from a picture",
+				note: "Attach a photo, scan or screenshot of the tab.",
+				requests: [
+					"Bring this tab into Guitar Pal.",
+					"Read this screenshot into Guitar Pal so I can hear it slowly.",
+					"Import the first exercise on this page into Guitar Pal.",
+				],
+			},
+			{
+				id: "ask-change",
+				heading: "Change or rearrange it",
+				note: "In the same chat after you got a link, or paste a Guitar Pal link.",
+				requests: [
+					"Make bar 2 of that Guitar Pal tab simpler.",
+					"Slow that Guitar Pal pattern to 70 bpm and put a capo on 3.",
+					"Here is a Guitar Pal link. Make the strum busier, with more up-strums:",
+				],
+			},
 		],
+		tocLabel: "On this page",
 		backHeading: "What you get back",
 		back: [
 			"A link like `guitarpal.sloanwan.com/p/aB3xK9mQ2z` that opens in the player: play, loop, change the tempo. No account needed.",
 			"`Import` copies it into your library to edit it: in this browser when signed out, to your account when signed in.",
 			"Each change makes a new link; links stop working after 30 days.",
-			"When reading an image, the AI lists the notes it was unsure of under the title. Check those against the original.",
+			"When reading an image, the AI lists the notes it was unsure of under the title. Check those against the original, and fix them in the editor after `Import`.",
 		],
 		referenceLead: "Tools and running your own server:",
 		referenceLink: "the MCP reference on GitHub",
@@ -211,20 +252,54 @@ export const MCP_GUIDE_COPY: Record<DocLang, McpGuideCopy> = {
 			"Opus 和 Sonnet 读图也偶尔会把数字写到相邻的弦上，记得对照原谱检查。",
 		],
 		askHeading: "可以这样问",
-		askLead: "在请求里点名 Guitar Pal，尤其是 ChatGPT，不点名它可能不会用。",
 		askName: "这句",
-		asks: [
-			{ text: "用 Guitar Pal 写一个慢一点的 6/8 指弹，和弦 Am–F–C–G，拇指弹低音。", hint: "写指弹谱" },
-			{ text: "用 Guitar Pal 给我一个 C G Am F 的扫弦节奏，90 bpm。", hint: "写扫弦节奏" },
-			{ text: "把这张谱导入 Guitar Pal。", hint: "读谱 —— 附上一张六线谱的照片或截图" },
-			{ text: "把刚才那段 Guitar Pal 谱的第 2 小节改简单一点。", hint: "修改 —— 拿到链接之后，在同一个对话里" },
+		askGroups: [
+			{
+				id: "ask-tab",
+				heading: "写指弹谱",
+				requests: [
+					"用 Guitar Pal 写一个慢一点的 6/8 指弹，和弦 Am–F–C–G，拇指弹低音。",
+					"用 Guitar Pal 写一段 G 调的 Travis 指弹练习，80 bpm。",
+					"用 Guitar Pal 写一小段 E 小调的 riff，带一个击弦和一个滑音。",
+				],
+			},
+			{
+				id: "ask-strum",
+				heading: "写扫弦节奏",
+				requests: [
+					"用 Guitar Pal 给我一个 C G Am F 的扫弦节奏，90 bpm。",
+					"用 Guitar Pal 写一个十六分音符的 funk 扫弦，带闷音，和弦 E9，100 bpm。",
+					"用 Guitar Pal 给我一个简单的 G D Em C 扫弦，变调夹夹 2 品。",
+				],
+			},
+			{
+				id: "ask-image",
+				heading: "从图片读谱",
+				note: "附上一张六线谱的照片、扫描件或截图。",
+				requests: [
+					"把这张谱导入 Guitar Pal。",
+					"把这张截图读进 Guitar Pal，我想慢速听一遍。",
+					"把这一页上的第一个练习导入 Guitar Pal。",
+				],
+			},
+			{
+				id: "ask-change",
+				heading: "修改或改编",
+				note: "拿到链接后在同一个对话里说，或者贴上一个 Guitar Pal 链接。",
+				requests: [
+					"把刚才那段 Guitar Pal 谱的第 2 小节改简单一点。",
+					"把刚才那个 Guitar Pal 节奏放慢到 70 bpm，变调夹夹 3 品。",
+					"这是一个 Guitar Pal 链接，把扫弦改得更密一点，多加几个上扫：",
+				],
+			},
 		],
+		tocLabel: "本页目录",
 		backHeading: "你会得到什么",
 		back: [
 			"一个形如 `guitarpal.sloanwan.com/p/aB3xK9mQ2z` 的链接，打开就是播放器：播放、循环、调速度，不用账号。",
 			"点 `Import` 会把它复制进你的曲库，在那里可以编辑：没登录时存在这个浏览器里，登录后存进你的账号。",
 			"每改一次就是一个新链接，链接 30 天后失效。",
-			"从图片读谱时，AI 没把握的音会列在标题下面，记得对照原谱看一下。",
+			"从图片读谱时，AI 没把握的音会列在标题下面，记得对照原谱看一下，点 `Import` 后可以在编辑器里改。",
 		],
 		referenceLead: "工具列表、自己部署服务器：",
 		referenceLink: "GitHub 上的 MCP 说明",

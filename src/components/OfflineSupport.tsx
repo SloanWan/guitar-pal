@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase";
 import { forgetAccountCopies } from "@/lib/offline/libraryCopy";
 import { forgetRememberedUser } from "@/lib/offline/rememberedUser";
-import { accountChanged, accountToRecord, CACHED_ACCOUNT_KEY, forgetKeptPages, serviceWorkerUrl } from "@/lib/pwa/offline";
+import { accountChanged, accountToRecord, askToWarm, CACHED_ACCOUNT_KEY, forgetKeptPages, serviceWorkerUrl } from "@/lib/pwa/offline";
 
 const OFFLINE_TOAST = "offline";
 
@@ -45,8 +45,13 @@ export default function OfflineSupport() {
 			})
 			// A browser that refuses workers (a private window, say) just has no offline use.
 			.catch(() => undefined);
+		// After a deploy the worker asked above is the old one, whose caches the new build's
+		// drops as it takes over: the new one is asked again then, or it keeps no pages.
+		const warm = () => askToWarm(container);
+		container.addEventListener("controllerchange", warm);
 		return () => {
 			cancelled = true;
+			container.removeEventListener("controllerchange", warm);
 		};
 	}, []);
 
@@ -64,7 +69,13 @@ export default function OfflineSupport() {
 				// No storage: nothing recorded, so the pages are forgotten on every account seen — the safe side.
 			}
 			if (accountChanged(recorded, event, current)) {
-				if ("caches" in window) forgetKeptPages(caches).catch(() => undefined);
+				// Fetched again at once, as the account now here: a page goes offline only once kept.
+				if ("caches" in window)
+					forgetKeptPages(caches)
+						.then(() => {
+							if ("serviceWorker" in navigator) askToWarm(navigator.serviceWorker);
+						})
+						.catch(() => undefined);
 				// The library copies are per account already; the one signed out of has no business staying (#469).
 				if (recorded) void forgetAccountCopies(recorded);
 			}

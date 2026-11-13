@@ -61,6 +61,27 @@ test.describe("offline", () => {
 		await playAndStop(page, "Pause");
 	});
 
+	test("a new build's worker keeps the tool pages too, fetched once it takes the page over", async ({ page, context }) => {
+		const kept = (cache: string) =>
+			page.evaluate(async (name) => (await caches.keys()).includes(name) && Boolean(await (await caches.open(name)).match("/fretboard")), cache);
+		await page.goto("/strum");
+		await controlled(page);
+		const current = await page.evaluate(async () => (await caches.keys()).find((key) => key.startsWith("gp-pages-")) ?? "");
+		await expect.poll(() => kept(current), { timeout: 30_000 }).toBe(true);
+
+		// What a deploy does: the page registers the worker under the next build's URL. That
+		// one drops the old build's caches as it takes over, and must fill its own.
+		await page.evaluate(() => navigator.serviceWorker.register("/sw.js?v=next", { scope: "/", updateViaCache: "none" }));
+		await expect.poll(() => kept("gp-pages-next"), { timeout: 30_000 }).toBe(true);
+		await expect.poll(() => kept(current)).toBe(false);
+
+		await context.setOffline(true);
+		await page.goto("/settings");
+		await page.getByRole("navigation", { name: "Pages" }).getByRole("link", { name: "Fretboard", exact: true }).click();
+		await expect(page).toHaveURL(/\/fretboard$/);
+		await expect(page.getByRole("heading", { name: "You're offline" })).toHaveCount(0);
+	});
+
 	test("a page with no copy here shows the offline page", async ({ page, context }) => {
 		await page.goto("/strum");
 		await controlled(page);

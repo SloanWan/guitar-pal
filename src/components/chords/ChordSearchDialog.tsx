@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Command as Cmdk } from "cmdk";
 import { SearchIcon, XIcon } from "lucide-react";
 
@@ -28,6 +28,8 @@ export default function ChordSearchDialog() {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [index, setIndex] = useState<readonly ChordIndexEntry[]>([]);
+	const [highlight, setHighlight] = useState("");
+	const listRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		function onKeyDown(e: KeyboardEvent) {
@@ -68,6 +70,14 @@ export default function ChordSearchDialog() {
 		useChordSearchNavigation(close);
 	const rows = useChordPaletteRows(index, query);
 
+	// cmdk lights the first row when the search changes, not when rows arrive: a
+	// query typed before the index (or a shape's matches) is in leaves the light on
+	// the "Show all" row, and Enter would open that once the chords appear above it.
+	useEffect(() => {
+		const first = listRef.current?.querySelector<HTMLElement>("[cmdk-item]:not([aria-disabled='true'])");
+		setHighlight(first?.dataset.value ?? "");
+	}, [rows]);
+
 	const handleOpenChange = useCallback((next: boolean) => {
 		setOpen(next);
 		if (!next) setQuery("");
@@ -86,7 +96,13 @@ export default function ChordSearchDialog() {
 					Search the chord library by name — try Cmaj7, F#m7b5, or C/G. Type several chords to compare them side
 					by side.
 				</DialogDescription>
-				<Command shouldFilter={false} label="Chord search" className="rounded-none bg-transparent">
+				<Command
+					shouldFilter={false}
+					value={highlight}
+					onValueChange={setHighlight}
+					label="Chord search"
+					className="rounded-none bg-transparent"
+				>
 					<div className="ck-head">
 						<SearchIcon aria-hidden className="ck-glass" />
 						<Cmdk.Input
@@ -101,7 +117,7 @@ export default function ChordSearchDialog() {
 							</button>
 						</DialogClose>
 					</div>
-					<CommandList className="ck-list max-h-[min(420px,56dvh)]">
+					<CommandList ref={listRef} className="ck-list max-h-[min(420px,56dvh)]">
 						<ChordSearchResults
 							rows={rows}
 							onSelectChord={goToChord}

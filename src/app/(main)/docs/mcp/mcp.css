@@ -213,11 +213,15 @@
 
 /* ---- which model, what to ask, what comes back ------------------------------------ */
 
-/* One group per thing to ask for: its heading, what to do besides asking,
-   then each request in a box of its own with its copy key, so a request reads
-   as something to paste rather than as prose. */
+/* One card per thing to ask for: its heading, what to do besides asking, then
+   each request on a grey block in the typed-text face, the way a code block
+   reads in a document, so it is plainly something to paste. The copy key is a
+   bare icon, the Strum header's kind (.st-icon). */
 .mcp-ask-group {
-	margin-top: 1.75rem;
+	margin-top: 1rem;
+	padding: 18px 20px;
+	border-radius: var(--gp-r-l);
+	background: var(--gp-card);
 }
 
 .mcp-page h3 {
@@ -237,24 +241,78 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	margin-top: 10px;
+	margin-top: 12px;
 }
 
 .mcp-asks > li {
 	display: flex;
 	align-items: center;
-	gap: 12px;
-	padding: 10px 10px 10px 16px;
+	gap: 6px;
+	padding: 4px 4px 4px 14px;
 	border-radius: var(--gp-r-m);
-	background: var(--gp-card);
-	box-shadow: inset 0 0 0 1px var(--gp-line);
+	background: var(--gp-well);
 }
 
-.mcp-ask-text {
+.mcp-page .mcp-ask-text {
 	flex: 1;
 	min-width: 0;
+	padding: 6px 0;
+	background: none;
+	font-family: var(--gp-f-mono), var(--gp-cjk);
+	font-size: 13.5px;
+	line-height: 1.55;
 	color: var(--gp-ink);
+	white-space: normal;
 	overflow-wrap: anywhere;
+}
+
+.mcp-icon {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--gp-r-s);
+	color: var(--gp-ink-3);
+	cursor: pointer;
+	transition:
+		color var(--gp-d-state) linear,
+		background-color var(--gp-d-state) linear;
+}
+
+.mcp-icon svg {
+	width: 17px;
+	height: 17px;
+}
+
+/* On the grey block, the hover face is the card's colour, not the block's own. */
+.mcp-icon:hover {
+	background: var(--gp-card);
+	color: var(--gp-ink);
+}
+
+.mcp-icon[data-done] {
+	color: var(--gp-ink);
+}
+
+.mcp-icon[data-done] svg {
+	animation: mcp-tick var(--gp-d-pop) var(--gp-spring-tab);
+}
+
+@keyframes mcp-tick {
+	from {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mcp-icon {
+		transition: none;
+	}
+	.mcp-icon[data-done] svg {
+		animation: none;
+	}
 }
 
 .mcp-list {

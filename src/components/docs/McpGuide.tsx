@@ -28,7 +28,22 @@ function Inline({ text }: { text: string }) {
 	return text.split("`").map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
 }
 
-function CopyButton({ text, label, copy }: { text: string; label: string; copy: McpGuideCopy }) {
+/**
+ * `plain` is a bare icon, the Strum header's kind: no face until the pointer
+ * is over it, a tick that pops in once copied. The URL and the config
+ * snippets keep the raised icon button beside their fields.
+ */
+function CopyButton({
+	text,
+	label,
+	copy,
+	plain = false,
+}: {
+	text: string;
+	label: string;
+	copy: McpGuideCopy;
+	plain?: boolean;
+}) {
 	const [done, setDone] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 	useEffect(() => () => clearTimeout(timer.current), []);
@@ -46,6 +61,20 @@ function CopyButton({ text, label, copy }: { text: string; label: string; copy: 
 		timer.current = setTimeout(() => setDone(false), COPIED_MS);
 	};
 
+	if (plain) {
+		return (
+			<button
+				type="button"
+				className="mcp-icon gp-focus"
+				aria-label={label}
+				title={label}
+				onClick={onClick}
+				data-done={done || undefined}
+			>
+				{done ? <Check aria-hidden /> : <Copy aria-hidden />}
+			</button>
+		);
+	}
 	return (
 		<Button variant="icon" size="xs" aria-label={label} onClick={onClick}>
 			{done ? <Check aria-hidden /> : <Copy aria-hidden />}
@@ -155,8 +184,8 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 							<ul className="mcp-asks">
 								{group.requests.map((request) => (
 									<li key={request}>
-										<p className="mcp-ask-text">{request}</p>
-										<CopyButton text={request} label={copy.copy(copy.askName)} copy={copy} />
+										<code className="mcp-ask-text">{request}</code>
+										<CopyButton text={request} label={copy.copy(copy.askName)} copy={copy} plain />
 									</li>
 								))}
 							</ul>

@@ -138,6 +138,34 @@ test("a fixed band in the header's colour covers the top inset", { tag: "@phone"
 	expect(sampled.colour).toBe(sampled.header);
 });
 
+/** The navigation bar runs along the page's top edge, over the band, not below the blur's reach (#519). */
+test("the navigation bar runs along the top edge, over the edge band", async ({ page }) => {
+	await page.goto("/chords");
+	// Hold the page back, so the bar stays up to be measured.
+	let release = () => {};
+	const held = new Promise<void>((resolve) => (release = resolve));
+	await page.route(/\/strum\?_rsc=/, async (route) => {
+		await held;
+		await route.continue();
+	});
+	await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Strum" }).click();
+	const bar = page.locator(".nav-progress");
+	await expect(bar).toBeVisible();
+	// A hit test skips what takes no pointer, so the bar takes one here to be found on top.
+	await page.addStyleTag({ content: ".nav-progress { pointer-events: auto !important; }" });
+	const barAt = (y: number) => page.evaluate((y) => document.elementFromPoint(1, y)?.closest(".nav-progress") !== null, y);
+
+	expect((await bar.boundingBox())?.y).toBe(0);
+	expect(await barAt(1)).toBe(true);
+	// Installed, it starts under the system's bar.
+	await page.addStyleTag({ content: ":root { --gp-inset-top: 24px; }" });
+	expect((await bar.boundingBox())?.y).toBe(24);
+	expect(await barAt(25)).toBe(true);
+
+	release();
+	await expect(page).toHaveURL(/\/strum$/);
+});
+
 /**
  * A header link moves to its section through a view transition typed `section` (#489);
  * the browser's back button does not animate.

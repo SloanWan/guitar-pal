@@ -40,10 +40,12 @@ export const viewport: Viewport = {
 // to the system's preference on a visitor who picked a theme.
 const themeInitScript = `(function(){var t;try{t=localStorage.getItem("gp-theme")}catch(e){}document.documentElement.dataset.theme=t==="dark"?"dark":"light";})()`;
 
-// The launch curtain (#490): on the installed app's cold start only — the first page of a
-// session in standalone — the launch image's mark comes to life until the page is ready
-// (LaunchCurtain lifts it). Set before first paint, like the theme.
-const launchInitScript = `(function(){try{if((matchMedia("(display-mode: standalone)").matches||navigator.standalone===true)&&!sessionStorage.getItem("gp-launched")){sessionStorage.setItem("gp-launched","1");document.documentElement.dataset.launch="";}}catch(e){}})()`;
+// The launch curtain (#490): when the installed app is launched — the loads iOS shows its
+// launch image for — the launch image's mark comes to life, then the page (LaunchCurtain).
+// A launch is a plain navigation that no page of this site led to: a reload, back / forward
+// or a full-page move inside the app (its referrer is ours) is not one, and a return from the
+// background loads nothing at all. Set before first paint, like the theme.
+const launchInitScript = `(function(){try{if(!(matchMedia("(display-mode: standalone)").matches||navigator.standalone===true))return;var n=performance.getEntriesByType("navigation")[0];if(n&&n.type!=="navigate")return;if(document.referrer&&new URL(document.referrer).origin===location.origin)return;document.documentElement.dataset.launch="";}catch(e){}})()`;
 
 export default function RootLayout({
   children,

@@ -4,7 +4,7 @@ import "@/components/fingerpick/reader/tab.css";
 import { useOnline } from "@/hooks/useOnline";
 import { useCoarsePointer } from "@/hooks/useCoarsePointer";
 import TouchFretInput, { type TouchFretControl } from "./TouchFretInput";
-import TouchFretPad from "./TouchFretPad";
+import TouchFretPad, { type FretPadPin } from "./TouchFretPad";
 import { WriteGateProvider } from "@/components/offline/WriteGate";
 import { OFFLINE_WRITE_REASON, refuseOfflineWrite, writesBlocked } from "@/lib/offline/writes";
 import "@/components/playback/icons.css";
@@ -222,6 +222,9 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 	const fretBoxRef = useRef<HTMLInputElement>(null);
 	const fretBox = useRef<TouchFretControl>(null);
 	const [fretBoxOpen, setFretBoxOpen] = useState(false);
+	// Where the tablet's keypad was dragged to; it stays there for the rest of the visit.
+	const [padPin, setPadPin] = useState<FretPadPin | null>(null);
+	const [pageEl, setPageEl] = useState<HTMLDivElement | null>(null);
 	function togglePlay(from: SlotTarget) {
 		if (playback.isPlaying) playback.stop();
 		else playback.playFrom(from);
@@ -422,7 +425,7 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 
 	return (
 		<WriteGateProvider signedIn={user !== null}>
-			<div className="te-page" data-m="tab">
+			<div className="te-page" data-m="tab" ref={setPageEl}>
 				<div className="te-body">
 					{crop && !wideSource && (
 						<aside className="te-src" aria-label="Source page">
@@ -631,8 +634,10 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 													control={fretBox}
 													sheetRef={tabRef}
 													cursor={cursor}
-													placeholder={fretBoxPlaceholder}
 													offered={offeredFret}
+													pin={padPin}
+													layer={pageEl}
+													onPin={setPadPin}
 													onEnter={touchWrite}
 													onClear={() => commit((p) => setInactive(p, cursor))}
 													onClose={() => setFretBoxOpen(false)}

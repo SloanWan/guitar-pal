@@ -250,7 +250,8 @@ test.describe("on a touch tablet", () => {
 		// Auto-advance: the keypad moved on to the next slot, and a 1 waits for its second digit.
 		const next = page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 2" });
 		await next.getByRole("button", { name: "1", exact: true }).tap();
-		await expect(next.getByLabel("Typed fret")).toHaveText("1");
+		// What is typed shows in the cell itself.
+		await expect(page.getByLabel("Typed fret")).toHaveText("1");
 		await next.getByRole("button", { name: "2", exact: true }).tap();
 		await expect(page.getByRole("button", { name: "Bar 1, slot 2, B string: fret 12" })).toBeAttached();
 
@@ -258,7 +259,7 @@ test.describe("on a touch tablet", () => {
 		const third = page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 3" });
 		await third.getByRole("button", { name: "2", exact: true }).tap();
 		await third.getByRole("button", { name: "Delete digit" }).tap();
-		await expect(third.getByLabel("Typed fret")).toHaveText("–");
+		await expect(page.getByLabel("Typed fret")).toBeHidden();
 		await page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 7" }).tap();
 		await page.getByRole("group", { name: "Fret keypad: B string, bar 1, slot 1" }).getByRole("button", { name: "Clear note" }).tap();
 		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeAttached();
@@ -277,9 +278,38 @@ test.describe("on a touch tablet", () => {
 		await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: fret 2" })).toBeAttached();
 		// The keypad starts empty on the new cell: nothing rode along.
 		const pad = page.getByRole("group", { name: "Fret keypad: e string, bar 1, slot 3" });
-		await expect(pad.getByLabel("Typed fret")).toHaveText("–");
+		await expect(page.getByLabel("Typed fret")).toBeHidden();
 		await pad.getByRole("button", { name: "4", exact: true }).tap();
 		await expect(page.getByRole("button", { name: "Bar 1, slot 3, e string: fret 4", exact: true })).toBeAttached();
+	});
+
+	test("dragged by its head, the keypad stays put while a column is filled", async ({ page }) => {
+		await page.goto("/tab/edit/new");
+		await page.getByRole("button", { name: "Bar 1, slot 1, e string: empty", exact: true }).tap();
+		const pad = page.getByRole("group", { name: /^Fret keypad/ });
+		const head = pad.locator(".te-pad-head");
+		const back = pad.getByRole("button", { name: "Back under the cursor" });
+		await expect(back).toBeDisabled();
+		const from = await head.boundingBox();
+		if (!from) throw new Error("no keypad head");
+		await page.mouse.move(from.x + 40, from.y + from.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(from.x + 340, from.y + 260, { steps: 6 });
+		await page.mouse.up();
+		const pinned = await pad.boundingBox();
+		await expect(back).toBeEnabled();
+
+		// Down the column: each string's cell, the keypad never moving off them.
+		for (const [string, fret] of [["e", "0"], ["B", "1"], ["G", "0"]] as const) {
+			await page.getByRole("button", { name: `Bar 1, slot 1, ${string} string: empty`, exact: true }).tap();
+			await page.getByRole("group", { name: `Fret keypad: ${string} string, bar 1, slot 1` }).getByRole("button", { name: fret, exact: true }).tap();
+			expect(await pad.boundingBox()).toEqual(pinned);
+		}
+		await expect(page.getByRole("button", { name: "Bar 1, slot 1, G string: fret 0" })).toBeAttached();
+
+		await back.tap();
+		await expect(back).toBeDisabled();
+		expect(await pad.boundingBox()).not.toEqual(pinned);
 	});
 
 	test("a hardware keyboard still types while the keypad is open", async ({ page }) => {

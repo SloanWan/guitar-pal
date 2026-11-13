@@ -18,6 +18,7 @@ import {
 import { spanCovers, type PatternIndex } from "@/lib/fingerpickIndex";
 import { chordSymbolLabel, clearString, replaceRowWithHints, rowDiffersFromHints, type FretHint } from "@/lib/fingerpickChords";
 import { techniqueDef } from "@/lib/techniqueRegistry";
+import { PERCUSSION_STRINGS } from "@/lib/fingerpickScheduler";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { CommitPattern } from "@/components/fingerpick/useEditHistory";
@@ -34,11 +35,19 @@ export interface HoveredCell {
 	stringIndex: number;
 }
 
+/** Whether the slot's hit strikes this string, which holds no note of its own. */
+export function struckByHit(slot: BeatSlot | undefined, stringIndex: number): boolean {
+	const sf = slot?.strings[stringIndex];
+	if (!slot?.percussion || slot.isRest || !sf || sf.fret !== null || sf.muted) return false;
+	return PERCUSSION_STRINGS[slot.percussion.kind].includes(stringIndex);
+}
+
 /** What a string holds at a slot, for its cell's name and the status line. */
 export function noteText(slot: BeatSlot | undefined, stringIndex: number): string {
 	const sf = slot?.strings[stringIndex];
 	if (!sf) return "empty";
 	if (sf.muted) return "x";
+	if (slot?.percussion && struckByHit(slot, stringIndex)) return `x (${techniqueDef(slot.percussion.kind)?.label.en ?? "hit"})`;
 	return sf.fret === null ? "empty" : `fret ${sf.fret}`;
 }
 
@@ -298,6 +307,8 @@ function MeasureBlock({
 																: undefined
 														: undefined;
 												const isCursor = cursor?.slotIndex === slotIndex && cursor.stringIndex === stringIndex;
+												// An empty string the slot's hit strikes dead shows the x it plays as, faint.
+												const hitX = struckByHit(slot, stringIndex);
 												return (
 													<button
 														key={stringIndex}
@@ -308,6 +319,7 @@ function MeasureBlock({
 														data-picked={pickedSet.has(`${slotIndex}:${stringIndex}`) ? "" : undefined}
 														data-h={axes > 0 ? axes : undefined}
 														data-empty={isEmpty ? "" : undefined}
+														data-hit={hitX ? "" : undefined}
 														data-hint={hint !== null ? (hint === "/" ? "off" : "") : undefined}
 														style={wash ? { backgroundColor: wash } : undefined}
 														aria-label={`Bar ${measureIndex + 1}, slot ${slotIndex + 1}, ${label} string: ${noteText(slot, stringIndex)}`}
@@ -320,7 +332,7 @@ function MeasureBlock({
 															onMenu(cell);
 														}}
 													>
-														{hint !== null ? hint : cellDisplay(sf)}
+														{hint !== null ? hint : hitX ? "x" : cellDisplay(sf)}
 														{glyph && <span className="te-mb-glyph">{glyph}</span>}
 														{tied && <span aria-hidden className="te-mb-tie" style={{ borderColor: WASH_TIE }} />}
 														{underSpan && <span aria-hidden className="te-mb-span" data-kind={underSpan} />}

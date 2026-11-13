@@ -287,12 +287,40 @@
 /* -------------------------------------------------------------------------------------
    7. TYPE — Figtree, loaded in #351 as --font-figtree (next/font/local, as in #291), for
    everything read; JetBrains Mono (--gp-f-mono) only for the tab stave's digits and text
-   that is typed. Chinese uses the device stack (never shipped). Numerals are tabular wherever digits
-   line up. In code, reference the family through the next/font CSS variable, never by
-   spelling "Figtree" (next/font/local names the family after the variable).
+   that is typed. Chinese is Chiron GoRound TC (#516), a rounded face self-hosted from
+   @fontsource/chiron-goround-tc (imported in the root layout; sliced by unicode-range,
+   so a page downloads only the slices its characters fall in), with the device stack
+   behind it. Two weights: 400 for text, 700 for headings — 500 matches 400 and 600
+   matches 700 — since a variable slice weighs four static ones. Figtree stays first in every stack, so Latin and digits never
+   change. Numerals are tabular wherever digits line up. In code, reference Figtree
+   through the next/font CSS variable, never by spelling "Figtree" (next/font/local
+   names the family after the variable).
    ------------------------------------------------------------------------------------- */
+
+/* GoRound follows the Taiwan standard, where full-width punctuation sits in the middle
+   of the box. This face takes only that punctuation, from the device's own Simplified
+   Chinese font, so ，。？ sit low and left as readers in mainland China expect; a device
+   with none of these falls through to GoRound's own. local() matches a font's full or
+   PostScript name, not its family (Chromium ignores "PingFang SC"), hence both. */
+@font-face {
+  font-family: "GP CJK Punct";
+  font-weight: 100 500;
+  src: local("PingFangSC-Regular"), local("PingFang SC Regular"), local("HiraginoSansGB-W3"),
+    local("MicrosoftYaHei"), local("Microsoft YaHei"), local("NotoSansCJKsc-Regular"),
+    local("Noto Sans CJK SC Regular"), local("SourceHanSansSC-Regular");
+  unicode-range: U+3001-3002, U+FF01, U+FF0C, U+FF1A-FF1B, U+FF1F;
+}
+@font-face {
+  font-family: "GP CJK Punct";
+  font-weight: 600 900;
+  src: local("PingFangSC-Semibold"), local("PingFang SC Semibold"), local("HiraginoSansGB-W6"),
+    local("MicrosoftYaHei-Bold"), local("Microsoft YaHei Bold"), local("NotoSansCJKsc-Bold"),
+    local("Noto Sans CJK SC Bold"), local("SourceHanSansSC-Bold");
+  unicode-range: U+3001-3002, U+FF01, U+FF0C, U+FF1A-FF1B, U+FF1F;
+}
+
 :root {
-  --gp-cjk: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --gp-cjk: "GP CJK Punct", "Chiron GoRound TC", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   --gp-f-body: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
   --gp-f-disp: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);
   --gp-f-num: var(--font-figtree, ui-sans-serif, system-ui), var(--gp-cjk);

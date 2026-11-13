@@ -26,6 +26,7 @@ A pre-commit hook (`.husky/pre-commit`) runs `tsc --noEmit`, `npm run lint`, and
 - **shadcn/ui** components (Radix UI primitives) in `src/components/ui/`
 - **VexFlow** for TAB rendering (fingerpicking feature)
 - **WebAudioFont presets** (`surikov/webaudiofontdata`, MIT) — three instrument presets bundled as JSON in `public/audio/webaudiofont/` (sources, hashes and license in `NOTICE.md` there); the GPL-3.0 `webaudiofont` player and its npm package are not used
+- **Chiron GoRound TC** (`@fontsource/chiron-goround-tc`, weights 400 and 700, SIL OFL 1.1) — Chinese text, self-hosted from the package (never Google Fonts, which mainland China cannot reach) and sliced by `unicode-range`; first in `--gp-cjk` behind a punctuation-only face from the device's Simplified Chinese font (#516, `tokens.css`)
 - **Vitest** for unit tests
 - **TypeScript** (strict mode) throughout
 

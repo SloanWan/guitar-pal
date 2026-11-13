@@ -8,6 +8,8 @@ import {
 	describeStrum,
 	shareIdFromLink,
 	ShareRefused,
+	SERVER_INSTRUCTIONS,
+	sideEffectLine,
 	strumShareFrom,
 	type GuitarPalMcpDeps,
 } from "@/lib/mcp/server";
@@ -121,6 +123,31 @@ describe("the server over a client", () => {
 		expect(tools.find((t) => t.name === "read_share")!.annotations?.readOnlyHint).toBe(true);
 	});
 
+	it("says when to use each tool, and what the three write tools do to the world", async () => {
+		const client = await open({ ...deps, shareTtlDays: 30 });
+		const { tools } = await client.listTools();
+		for (const tool of tools) {
+			expect(tool.description, tool.name).toMatch(/^Use this when the player/);
+			expect(tool.description, tool.name).toMatch(/Not for|Reads only/);
+			const a = tool.annotations!;
+			expect([a.readOnlyHint, a.destructiveHint, a.openWorldHint].every((h) => typeof h === "boolean"), tool.name).toBe(true);
+		}
+		for (const name of ["propose_strum", "propose_tab", "import_tab"]) {
+			const tool = tools.find((t) => t.name === name)!;
+			expect(tool.description).toContain(sideEffectLine(30));
+			expect(tool.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, openWorldHint: true });
+		}
+		expect(tools.find((t) => t.name === "read_share")!.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+		expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
+	});
+
+	it("words the side effects for the configured lifetime", () => {
+		expect(sideEffectLine(30)).toContain("expires after 30 days");
+		expect(sideEffectLine(7)).toContain("expires after 7 days");
+		expect(sideEffectLine(0)).toContain("does not expire");
+		expect(sideEffectLine(30)).toContain("does not generate audio");
+	});
+
 	it("propose_strum: validates, saves, and answers with the link and the rhythm", async () => {
 		const client = await open(deps);
 		const r = await call(client, "propose_strum", { name: "Folk strum", rhythm: "D DU UD ", chords: ["C", "G", "Am", "F"], bpm: 90 });
@@ -128,6 +155,7 @@ describe("the server over a client", () => {
 		const text = textOf(r);
 		expect(text).toContain(`${ORIGIN}/p/share00001`);
 		expect(text).toContain("Rhythm: D DU UD");
+		expect(text).not.toContain("did not fill its bar");
 		expect(text).toContain("C | G | Am | F");
 		expect(text).toMatch(/stops opening in 30 days/);
 		const saved = rows.get("share00001");

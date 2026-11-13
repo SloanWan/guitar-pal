@@ -166,6 +166,17 @@ describe("parseRhythm", () => {
 			expect(result.value.padded).toBe(true);
 		});
 
+		it("counts written trailing blanks as filling the bar", () => {
+			for (const rhythm of ["D DU UD ", "D D D D ", "D       "]) {
+				const result = parseRhythm(rhythm);
+				expect(result.ok).toBe(true);
+				if (!result.ok) return;
+				expect(result.value.padded, rhythm).toBe(false);
+			}
+			const short = parseRhythm("D DU UD");
+			expect(short.ok && short.value.padded).toBe(true);
+		});
+
 		it("honours a non-4/4 meter", () => {
 			const beats = beatsOf("DUDUDU", { beatsPerBar: 3 });
 			expect(beats).toHaveLength(3);

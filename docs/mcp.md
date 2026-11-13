@@ -98,6 +98,20 @@ message instead of a link. claude.ai calls from Anthropic's published egress
 ranges on behalf of all its users, so those ranges share one larger bucket
 (`src/lib/mcp/callers.ts`); the daily budget caps everyone together.
 
+Tool annotations, and why:
+
+| tool | readOnly | destructive | openWorld | why |
+|---|---|---|---|---|
+| `propose_strum`, `propose_tab`, `import_tab` | false | false | true | each call saves a new share; nothing existing is changed or removed; the share is a public link, so the call publishes |
+| `read_share` | true | false | false | reads a share by id and writes nothing; only Guitar Pal's own shares |
+
+The write tools' descriptions say the same in words: a new public `/p/<id>`
+snapshot, open to anyone with the link, expiring after `MCP_SHARE_TTL_DAYS`.
+`src/lib/mcp/__evals__/routing.eval.ts` checks whether models call the tools
+when they should and not otherwise (`MCP_EVAL_LABEL=<label> npm run evals --
+src/lib/mcp`, results in `routing-results.json`); `__evals__/quality/run.ts`
+scores what they write.
+
 Running your own: beyond the app's env, set `SUPABASE_SERVICE_ROLE_KEY` and
 `MCP_SHARE_OWNER_ID` (the account shares are written as), optionally
 `MCP_DAILY_SHARES` (default 500) and `MCP_SHARE_TTL_DAYS` (default 30, 0 keeps

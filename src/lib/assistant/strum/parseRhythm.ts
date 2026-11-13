@@ -119,7 +119,9 @@ function parseBar(
 		}
 	}
 
-	// Trailing blanks carry no rhythm; patternNotation drops them on write.
+	// Trailing blanks carry no rhythm; patternNotation drops them on write. They
+	// still count as written, so "D DU UD " fills its bar and is not "padded".
+	const written = cells.length;
 	while (cells.length > 0 && cells[cells.length - 1] === null) cells.pop();
 	if (cells.length === 0) return null;
 
@@ -134,7 +136,7 @@ function parseBar(
 		return null;
 	}
 
-	const padded = cells.length < total;
+	const padded = written < total;
 	while (cells.length < total) cells.push(null);
 
 	// Literal: one character, one cell, and nothing nobody wrote. The travelling

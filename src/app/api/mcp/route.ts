@@ -83,6 +83,7 @@ function depsFor(request: Request, caller: CallerKey): GuitarPalMcpDeps {
 	return {
 		chordIndex: getChordIndex,
 		origin: requestOrigin(request),
+		shareTtlDays: shareTtlDays(),
 		async loadShare(id) {
 			// Reads go under the anon key like the page does: the id is the capability.
 			const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
@@ -94,15 +95,15 @@ function depsFor(request: Request, caller: CallerKey): GuitarPalMcpDeps {
 			const ownerId = process.env.MCP_SHARE_OWNER_ID;
 			if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !ownerId) {
 				console.error("[mcp] SUPABASE_SERVICE_ROLE_KEY or MCP_SHARE_OWNER_ID is unset; shares cannot be written");
-				throw new ShareRefused("This Guitar Pal server is not set up to save links yet. Give the player the pattern as text instead.");
+				throw new ShareRefused("This Guitar Pal server is not set up to save links yet, so no link was made.");
 			}
 			const perIp = (caller.hosted ? hostedShareLimiter : shareIpLimiter).check(caller.key);
 			if (!perIp.allowed) {
-				throw new ShareRefused(`Too many links from here in the last hour; try again in ${Math.ceil(perIp.retryAfterSeconds / 60)} minutes. Give the player the pattern as text meanwhile.`);
+				throw new ShareRefused(`Too many links from here in the last hour; try again in ${Math.ceil(perIp.retryAfterSeconds / 60)} minutes. No link was made.`);
 			}
 			const budget = shareBudget.check("all");
 			if (!budget.allowed) {
-				throw new ShareRefused("Guitar Pal has made all the links it makes in a day; try again tomorrow. Give the player the pattern as text meanwhile.");
+				throw new ShareRefused("Guitar Pal has made all the links it makes in a day; try again tomorrow. No link was made.");
 			}
 			const id = newShareId();
 			const days = shareTtlDays();

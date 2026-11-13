@@ -51,6 +51,8 @@ export interface GuitarPalMcpDeps {
 	loadShare(id: string): Promise<SharedItem | null>;
 	/** `https://guitarpal.example`, for the links in tool results. */
 	origin: string;
+	/** Days a share stays open (`MCP_SHARE_TTL_DAYS`), for the tools' side-effect lines; 0 never closes. Default 30. */
+	shareTtlDays?: number;
 }
 
 const text = (body: string, isError = false): CallToolResult => ({
@@ -76,12 +78,12 @@ function daysUntil(date: Date, now: Date = new Date()): number {
 
 function footer(saved: SavedShare, origin: string): string {
 	const expiry = saved.expiresAt ? ` The link stops opening in ${daysUntil(saved.expiresAt)} days.` : "";
-	return `Open it here: ${link(origin, saved.id)}\nThe page is the full player — play, loop, change tempo — and "Import" copies it into the player's own library to edit. Give the player the link as-is.${expiry}`;
+	return `Open it here: ${link(origin, saved.id)}\nThe page is the full player — play, loop, change tempo — and "Import" copies it into the player's own library to edit. The link is the playable result.${expiry}`;
 }
 
 function listWarnings(warnings: readonly ValidationIssue[]): string {
 	if (warnings.length === 0) return "";
-	return `\nWarnings (tell the player):\n${warnings.map((w) => `- ${w.message}`).join("\n")}`;
+	return `\nWarnings, about what the link plays:\n${warnings.map((w) => `- ${w.message}`).join("\n")}`;
 }
 
 /** A strum proposal as the share it becomes: the rhythm, and the chord bars written over it when there are any. */
@@ -135,16 +137,40 @@ export function describeFingerpick(pattern: FingerpickPattern): string {
 	return `${header.join("\n")}\n\n${patternToAsciiTab(pattern)}`;
 }
 
+/**
+ * Each hint's reason, recorded in docs/mcp.md for the directories' review.
+ * Write tools: not read-only (each saves a share); not destructive (a new row,
+ * nothing existing is changed or removed); not idempotent (the same call twice
+ * makes two links); open-world (the link is public, so the call publishes).
+ */
+const WRITE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } as const;
+/** read_share: reads a share by id and writes nothing; the same id reads the same snapshot; confined to Guitar Pal's own shares. */
+const READ_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
+
 const NO_SHARE_MESSAGE = "The share could not be saved. Try again in a moment.";
+
+/**
+ * What every write tool does to the world, said plainly in its description
+ * (OpenAI: "Side effects should never be hidden or implicit"), and that what
+ * plays is the app replaying notation, not generated audio.
+ */
+export function sideEffectLine(ttlDays: number): string {
+	const expiry = ttlDays > 0 ? `expires after ${ttlDays} days` : "does not expire";
+	return `Each successful call saves a new public snapshot at a /p/<id> link: anyone with the link can open it, it ${expiry}, and nothing that already exists is changed. The page plays what was written on Guitar Pal's own guitar samples; it does not generate audio.`;
+}
+
+/** The server's instructions: what it does and how its tools answer, not orders to the model. */
+export const SERVER_INSTRUCTIONS =
+	"Guitar Pal turns a strumming pattern or a fingerpicking tab into a link that plays it in the browser, on the app's own guitar samples. Each tool checks what it is given with the same validators the app uses: an error result names what is not playable, and a corrected call is accepted. A successful write returns a /p/<id> link, which is the playable result; text that has not passed through a tool has not been checked and does not play.";
 
 export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 	const server = new McpServer(
 		{ name: SERVER_NAME, version: SERVER_VERSION },
 		{
-			instructions:
-				"Guitar Pal plays strumming patterns and fingerpicking tabs in the browser. Write what the player asked for, call the matching tool, and give the player the link the tool returns. The tools validate: an error result says what to fix — fix it and call again, do not describe the fix to the player. Never paste a tab or rhythm you have not passed through a tool as if it were playable.",
+			instructions: SERVER_INSTRUCTIONS,
 		},
 	);
+	const effects = sideEffectLine(deps.shareTtlDays ?? 30);
 
 	async function save(item: SharedItem): Promise<SavedShare | CallToolResult> {
 		try {
@@ -162,8 +188,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"propose_strum",
 		{
 			title: "Propose a strumming pattern",
-			description:
-				"Write a strumming pattern, with or without a chord progression, and get a link that plays it. The rhythm is one bar of 4/4 in Guitar Pal's notation: D down, U up, X mute, a space for a cell where nothing is struck — 8 cells for eighths (\"D DU UD \"), 16 for sixteenths. Give one chord word per bar (\"C\", \"Am\", \"F#m7\"); every chord is looked up in the chord library, and words it does not know are left off with a warning. Returns the link and the pattern as written, or an error naming what is not playable.",
+			description: `Use this when the player wants a strumming pattern they can hear and play along to: a rhythm for a song, a chord progression in time, a strum to practise changes with. Not for chord theory, fingering or gear advice, or anything the player only wants explained. Write the rhythm, with or without chords, and get a link that plays it. The rhythm is one bar of 4/4 in Guitar Pal's notation: D down, U up, X mute, a space for a cell where nothing is struck — 8 cells for eighths (\"D DU UD \"), 16 for sixteenths. Give one chord word per bar (\"C\", \"Am\", \"F#m7\"); every chord is looked up in the chord library, and words it does not know are left off with a warning. ${effects} Returns the link and the pattern as written, or an error naming what is not playable.`,
 			inputSchema: {
 				name: z.string().max(80).describe("Two or three words."),
 				rhythm: z.string().max(200).describe("One bar: D, U, X and spaces, 8 or 16 cells."),
@@ -171,7 +196,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 				bpm: z.number().int().min(0).max(300).describe("Beats per minute; 0 when the player named no tempo."),
 				capo: z.number().int().min(0).max(12).optional().describe("Capo fret for the progression, when the player named one."),
 			},
-			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+			annotations: WRITE_ANNOTATIONS,
 		},
 		async ({ name, rhythm, chords, bpm, capo }) => {
 			const index = await deps.chordIndex();
@@ -198,8 +223,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"propose_tab",
 		{
 			title: "Propose a fingerpicking tab",
-			description:
-				"Write a fingerpicking pattern, a melody or an exercise and get a link that plays it. Notes go on a grid of even slots per bar, so the rhythm is exact and any fret can be written: say how many slots a bar has, then put each note on one. Use this when composing, and for a text (ASCII) tab you were given — lay each column of the tab on a slot. For a tab read off an image or a printed page, where the note values are written, use import_tab instead. Returns the link and the tab as the app holds it, or an error naming the bar to fix.",
+			description: `Use this when the player wants a fingerpicking pattern, a riff, a melody or an exercise they can hear, loop or play along with, or has pasted a text (ASCII) tab to play. Not for a tab in a photo, screenshot or scan (that is import_tab), nor for explaining a technique. Notes go on a grid of even slots per bar, so the rhythm is exact and any fret can be written: say how many slots a bar has, then put each note on one. Use this when composing, and for a text (ASCII) tab you were given — lay each column of the tab on a slot. For a tab read off an image or a printed page, where the note values are written, use import_tab instead. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
 			inputSchema: {
 				name: z.string().max(80).describe("Two or three words."),
 				slotsPerBar: z
@@ -235,7 +259,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 				bpm: z.number().int().min(0).max(300).describe("Beats per minute, counting the beat (♩ in 4/4, ♩. in 6/8); 0 when the player named no tempo."),
 				timeSignature: z.string().describe(`${SUPPORTED_METERS.map(meterLabel).join(", ")}; empty for 4/4.`),
 			},
-			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+			annotations: WRITE_ANNOTATIONS,
 		},
 		async ({ name, slotsPerBar, bars, bpm, timeSignature }) => {
 			const built = proposeTab({ name, slotsPerBar, bars, bpm, timeSignature });
@@ -251,10 +275,9 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"import_tab",
 		{
 			title: "Import a transcribed tab",
-			description:
-				"Bring a tab you read off an image, a photo or a printed page into Guitar Pal as a playable link. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in `uncertain` — the player checks those against the original. The app validates the durations against the meter and bounds the frets; it cannot tell a note on the wrong string, so be exact about strings. Returns the link and the tab as the app holds it, or an error naming the bar to fix.",
+			description: `Use this when the player shares a photo, screenshot or scan of a guitar tab and wants to play it, hear it or bring it into Guitar Pal. Not for composing (that is propose_tab), nor for a question about what the image shows. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in \`uncertain\` — the player checks those against the original. The app validates the durations against the meter and bounds the frets; it cannot tell a note on the wrong string, so be exact about strings. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
 			inputSchema: IMPORT_TAB_SHAPE,
-			annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+			annotations: WRITE_ANNOTATIONS,
 		},
 		async (input) => {
 			const index = await deps.chordIndex();
@@ -277,9 +300,9 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		{
 			title: "Read a Guitar Pal link",
 			description:
-				"Read a pattern back from a Guitar Pal share link (https://…/p/XXXXXXXXXX) or its id, to change it or talk about it. A fingerpicking tab comes back as ASCII and as the same bars import_tab takes, so you can edit the bars and call import_tab to make a new link; a strumming pattern comes back as its rhythm line and chords for propose_strum. A share is a snapshot: every revision is a new link.",
+				"Use this when the player gives a Guitar Pal share link (https://…/p/XXXXXXXXXX) or its id, to change the pattern or talk about it. Reads only: nothing is written. A fingerpicking tab comes back as ASCII and as the same bars import_tab takes, so you can edit the bars and call import_tab to make a new link; a strumming pattern comes back as its rhythm line and chords for propose_strum. A share is a snapshot: a revision is made with those tools, as a new link.",
 			inputSchema: { link: z.string().max(300).describe("The share link or its 10-character id.") },
-			annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+			annotations: READ_ANNOTATIONS,
 		},
 		async ({ link: value }) => {
 			const id = shareIdFromLink(value);

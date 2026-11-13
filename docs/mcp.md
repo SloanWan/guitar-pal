@@ -105,6 +105,8 @@ Tool annotations, and why:
 | `propose_strum`, `propose_tab`, `import_tab` | false | false | true | each call saves a new share; nothing existing is changed or removed; the share is a public link, so the call publishes |
 | `read_share` | true | false | false | reads a share by id and writes nothing; only Guitar Pal's own shares |
 
+Each tool's title is also its `annotations.title`, where the Claude directory reads the name it lists.
+
 The write tools' descriptions say the same in words: a new public `/p/<id>`
 snapshot, open to anyone with the link, expiring after `MCP_SHARE_TTL_DAYS`.
 `src/lib/mcp/__evals__/routing.eval.ts` checks whether models call the tools

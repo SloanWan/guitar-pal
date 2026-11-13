@@ -272,12 +272,14 @@
    available, since App Router client navigation never triggers browser chrome. */
 .nav-progress {
 	position: fixed;
-	/* Under the system's top bar in an installed app, the bar would not be seen (#478). */
-	top: var(--gp-safe-top, 0px);
+	/* The page's top edge: 0 in a browser tab, just under the system's bar in an
+	   installed app (#478), not below the blur's reach the header keeps (#519). */
+	top: var(--gp-inset-top, 0px);
 	left: 0;
 	right: 0;
 	height: 3px;
-	z-index: 100; /* above the shell's header */
+	/* The edge band's, and later in the body, so the bar lies over the band. */
+	z-index: 2147483647;
 	overflow: hidden;
 	pointer-events: none;
 	/* data-m on the bar is the destination's module (nav-progress.tsx) */

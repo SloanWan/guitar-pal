@@ -130,6 +130,8 @@ describe("the server over a client", () => {
 			expect(tool.description, tool.name).toMatch(/^Use this when the player/);
 			expect(tool.description, tool.name).toMatch(/Not for|Reads only/);
 			const a = tool.annotations!;
+			expect(a.title, tool.name).toBe(tool.title);
+			expect(tool.title, tool.name).toBeTruthy();
 			expect([a.readOnlyHint, a.destructiveHint, a.openWorldHint].every((h) => typeof h === "boolean"), tool.name).toBe(true);
 		}
 		for (const name of ["propose_strum", "propose_tab", "import_tab"]) {

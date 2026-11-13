@@ -70,3 +70,16 @@ test("a document's title and language switch share a row, and the switch changes
 	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 	expect(overflow).toBeLessThanOrEqual(0);
 });
+
+/** The support page's questions are closed until pressed, and close again (#515). */
+test("the support page's questions open and close", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/support?lang=en");
+	const question = page.getByRole("article").getByText("Why is there no sound?", { exact: true });
+	const answer = page.getByText("turn Silent mode off.", { exact: false });
+	await expect(question).toBeVisible();
+	await expect(answer).toBeHidden();
+	await question.click();
+	await expect(answer).toBeVisible();
+	await question.click();
+	await expect(answer).toBeHidden();
+});

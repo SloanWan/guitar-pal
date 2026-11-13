@@ -209,3 +209,86 @@
 	border: 0;
 	border-top: 1px solid var(--gp-line);
 }
+
+/* Questions and answers (`<details>` in the Markdown, as on the support page):
+   each question a card on the page, closed until pressed, so the questions
+   read as a list of what is answered. The answer opens under its question;
+   where the browser can animate to `auto`, its height eases open. */
+.doc-prose details {
+	interpolate-size: allow-keywords;
+	margin: 0 0 0.5rem;
+	border-radius: var(--gp-r-m);
+	background: var(--gp-card);
+}
+
+.doc-prose summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.85rem 1rem;
+	font-family: var(--gp-f-disp);
+	font-size: 16px;
+	font-weight: 650;
+	line-height: 1.35;
+	color: var(--gp-ink);
+	list-style: none;
+	cursor: pointer;
+}
+
+.doc-prose summary::-webkit-details-marker {
+	display: none;
+}
+
+/* The chevron: down while closed, up while open. */
+.doc-prose summary::after {
+	content: "";
+	flex: none;
+	width: 8px;
+	height: 8px;
+	margin: -4px 4px 0 0;
+	border-right: 2px solid var(--gp-ink-3);
+	border-bottom: 2px solid var(--gp-ink-3);
+	transform: rotate(45deg);
+	transition:
+		transform var(--gp-d-rise) var(--gp-ease-state),
+		border-color var(--gp-d-state) var(--gp-ease-state);
+}
+
+.doc-prose summary:hover::after {
+	border-color: var(--gp-ink);
+}
+
+.doc-prose details[open] > summary::after {
+	margin-top: 4px;
+	transform: rotate(-135deg);
+}
+
+.doc-prose details::details-content {
+	block-size: 0;
+	overflow: hidden;
+	transition:
+		block-size var(--gp-d-rise) var(--gp-ease-state),
+		content-visibility var(--gp-d-rise) allow-discrete;
+}
+
+.doc-prose details[open]::details-content {
+	block-size: auto;
+}
+
+.doc-prose details > :not(summary) {
+	margin-left: 1rem;
+	margin-right: 1rem;
+}
+
+.doc-prose details > :last-child {
+	padding-bottom: 0.9rem;
+	margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.doc-prose summary::after,
+	.doc-prose details::details-content {
+		transition: none;
+	}
+}

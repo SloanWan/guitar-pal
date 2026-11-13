@@ -493,30 +493,69 @@
 			transform: translateY(-4px) scale(0.97);
 		}
 	}
+	/* Dragged by its head, it stays where it was left (TouchFretPad). */
+	.te-pad[data-pinned] {
+		position: fixed;
+		animation: none;
+	}
 	.te-pad-head {
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 8px;
-		height: 28px;
-		padding: 0 4px 4px;
+		align-items: center;
+		gap: 4px;
+		height: 30px;
+		margin: -4px -6px 4px;
+		padding: 0 6px 0 10px;
+		border-radius: var(--gp-r-m) var(--gp-r-m) 0 0;
+		cursor: grab;
+		touch-action: none;
+	}
+	.te-pad-head:active {
+		cursor: grabbing;
 	}
 	.te-pad-where {
+		flex: 1;
 		overflow: hidden;
 		color: var(--gp-ink-3);
 		font-size: 12px;
 		white-space: nowrap;
 		text-overflow: ellipsis;
 	}
-	.te-pad-value {
-		min-width: 2ch;
-		color: var(--gp-ink);
-		font: 700 20px/1 var(--gp-f-num);
-		font-variant-numeric: tabular-nums;
-		text-align: right;
+	.te-pad-follow {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border-radius: var(--gp-r-s);
+		color: var(--gp-m-700);
 	}
-	.te-pad-value[data-empty] {
+	.te-pad-follow:disabled {
+		color: var(--gp-ink-mute);
+		opacity: 0.5;
+	}
+	.te-pad-grip {
+		flex: none;
 		color: var(--gp-ink-3);
+	}
+	/* What is typed, over the cursor's cell; the shape's fret faint before anything is. */
+	.te-pad-typed {
+		position: absolute;
+		z-index: 3;
+		display: grid;
+		place-items: center;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+		font: 700 13.5px/1 var(--gp-f-num);
+		font-variant-numeric: tabular-nums;
+		pointer-events: none;
+	}
+	.te-pad-typed[data-empty] {
+		background: var(--te-pick);
+		box-shadow: inset 0 0 0 2px var(--gp-m-500);
+		color: color-mix(in srgb, var(--gp-m-700) 55%, transparent);
+	}
+	.te-pad-typed[hidden] {
+		display: none;
 	}
 	.te-pad-keys {
 		display: grid;
@@ -529,11 +568,6 @@
 		padding: 0;
 		font: 600 18px/1 var(--gp-f-num);
 		font-variant-numeric: tabular-nums;
-	}
-	.te-pad-offer {
-		margin-left: 3px;
-		font-size: 12px;
-		opacity: 0.85;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.te-pad[data-placed] {
@@ -780,6 +814,11 @@
 		color: var(--gp-ink-mute);
 		font-weight: 500;
 	}
+	/* struck dead by the slot's hit, not written: the module's ink, faint */
+	.te-mb-cell[data-hit] {
+		color: color-mix(in srgb, var(--gp-m-700) 60%, transparent);
+		font-weight: 650;
+	}
 	.te-mb-cell:hover {
 		background: color-mix(in oklab, var(--gp-ink) 6%, transparent);
 	}
@@ -992,9 +1031,18 @@
 		color: var(--gp-ink-3);
 		font-weight: 780;
 	}
+	/* the slot's hit, as a tag under its column */
 	.te-mb-hit {
-		margin-right: 1px;
-		color: var(--gp-m-700);
+		display: inline-block;
+		min-width: 13px;
+		margin-right: 2px;
+		padding: 1px 3px;
+		border-radius: var(--gp-r-xs);
+		background: var(--gp-m-500);
+		color: var(--gp-m-on);
+		font-size: 9.5px;
+		font-weight: 780;
+		line-height: 1;
 	}
 	/* The footer: one-value fills, the repeat barlines and their count, the pick sequence. */
 	.te-mb-foot {

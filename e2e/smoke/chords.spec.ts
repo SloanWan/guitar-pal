@@ -140,7 +140,32 @@ test("⌘K finds a chord from another page, and its close button puts it away", 
 
 	await page.keyboard.press("ControlOrMeta+k");
 	await palette.getByRole("combobox").fill("Am");
-	await expect(palette.getByRole("option", { name: /^A minor/ })).toBeVisible();
+	// Enter takes the highlighted row. A minor can show before the highlight
+	// reaches it, and Enter then opens the row still lit (the A chords).
+	await expect(palette.getByRole("option", { name: /^A minor/ })).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Enter");
+	await expect(page).toHaveURL(/\/chords\/a\/minor/);
+});
+
+test("⌘K typed before the chord index arrives still opens the chord", async ({ page }) => {
+	await page.goto("/strum");
+	await hydrated(page.getByRole("button", { name: "Play", exact: true }));
+	// The index is the palette's one server action, read on the first open. Hold
+	// it until the query is in, so only the "Show all" row is there to light.
+	let release = () => {};
+	const held = new Promise<void>((resolve) => (release = resolve));
+	await page.route("**/strum", async (route) => {
+		if (route.request().method() === "POST" && route.request().headers()["next-action"]) await held;
+		await route.continue();
+	});
+
+	await page.keyboard.press("ControlOrMeta+k");
+	const palette = page.getByRole("dialog", { name: "Chord search" });
+	await palette.getByRole("combobox").fill("Am");
+	await expect(palette.getByRole("option", { name: /^Show all A chords/ })).toHaveAttribute("aria-selected", "true");
+
+	release();
+	await expect(palette.getByRole("option", { name: /^A minor/ })).toHaveAttribute("aria-selected", "true");
 	await page.keyboard.press("Enter");
 	await expect(page).toHaveURL(/\/chords\/a\/minor/);
 });

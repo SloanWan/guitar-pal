@@ -40,8 +40,8 @@ const PRECACHE = [
 	"/audio/webaudiofont/0280_Chaos_sf2_file.json",
 ];
 
-/** Pages that work offline once their copy is kept: the tools, which need nothing from a server to play. */
-const OFFLINE_PAGES = ["/", "/strum", "/tab", "/fretboard", "/docs/assistant-grammar"];
+/** Pages that work offline once their copy is kept: the tools, which need nothing from a server to play, and the guides. */
+const OFFLINE_PAGES = ["/", "/strum", "/tab", "/fretboard", "/docs", "/docs/install", "/docs/assistant-grammar"];
 /** The same, for a page and everything under it. */
 const OFFLINE_SECTIONS = ["/chords", "/tab/edit"];
 /** Fetched in the background once the worker runs, so they open offline before they were ever visited. */

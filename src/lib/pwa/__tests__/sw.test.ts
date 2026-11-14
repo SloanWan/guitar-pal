@@ -51,7 +51,7 @@ describe("strategyFor", () => {
 	});
 
 	it("keeps the tool pages, and the chord pages under /chords", () => {
-		for (const page of ["/", "/strum", "/tab", "/fretboard", "/chords", "/chords/c/major", "/tab/edit/new", "/docs/assistant-grammar"]) {
+		for (const page of ["/", "/strum", "/tab", "/fretboard", "/chords", "/chords/c/major", "/tab/edit/new", "/docs", "/docs/install", "/docs/assistant-grammar"]) {
 			expect(strategy(page, "navigate"), page).toBe("page");
 		}
 		expect(strategy("/strum?pattern=p1", "navigate")).toBe("page");

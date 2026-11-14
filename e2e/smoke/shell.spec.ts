@@ -48,6 +48,42 @@ test.describe("on a phone", { tag: "@phone" }, () => {
 		await expect(page.getByRole("navigation", { name: "Tabs" }).locator('[aria-current="page"]')).toHaveCount(0);
 	});
 
+	/** An installed app has no address bar: More is the way to the docs and the legal pages (#500). */
+	test("More reaches the docs and the legal pages", async ({ page }) => {
+		await page.goto("/strum");
+		await page.getByRole("button", { name: "More" }).click();
+		const more = page.getByRole("dialog", { name: "More" });
+		await expect(more.getByRole("navigation", { name: "Legal" }).getByRole("link", { name: "Support" })).toBeVisible();
+		await more.getByRole("link", { name: /Docs/ }).click();
+		await expect(page).toHaveURL(/\/docs$/);
+		await expect(more).toBeHidden();
+		await expect(page.getByRole("link", { name: /Add Guitar Pal to your home screen/ })).toBeVisible();
+	});
+
+	/** The sheet closes as a link is pressed, taking the link with it; the bar still runs until the page lands. */
+	test("a link in More runs the navigation bar after the sheet has closed", async ({ page }) => {
+		await page.goto("/strum");
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		await page.route(/\/docs\?_rsc=/, async (route) => {
+			await held;
+			await route.continue();
+		});
+		await page.getByRole("button", { name: "More" }).click();
+		const more = page.getByRole("dialog", { name: "More" });
+		await more.getByRole("link", { name: /Docs/ }).click();
+		await expect(more).toBeHidden();
+		const bar = page.locator(".nav-progress");
+		await expect(bar).toBeVisible();
+		// Past the bar's own minimum and fade: still up while the page is held, so it is the navigation's.
+		await page.waitForTimeout(1200);
+		await expect(bar).toBeVisible();
+		await expect(bar).not.toHaveClass(/is-exiting/);
+		release();
+		await expect(page).toHaveURL(/\/docs$/);
+		await expect(bar).toBeHidden();
+	});
+
 	for (const path of ["/", "/strum", "/tab", "/chords", "/fretboard", "/books", "/auth"]) {
 		test(`${path} has no horizontal scroll at 400px`, async ({ page }) => {
 			await page.goto(path);

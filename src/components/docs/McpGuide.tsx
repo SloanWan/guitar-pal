@@ -6,12 +6,15 @@ import { toast } from "sonner";
 import { Segmented } from "@/components/ui/segmented";
 import { TEXT_LINK } from "@/components/auth/formText";
 import "@/components/playback/icons.css";
+import DocBackLink from "@/components/docs/DocBackLink";
 import DocLangSwitch from "@/components/docs/DocLangSwitch";
 import DocToc from "@/components/docs/DocToc";
+import Inline from "@/components/docs/Inline";
 import { MCP_GUIDE_COPY, MCP_REFERENCE_URL, type McpGuideCopy } from "@/components/docs/mcpGuideCopy";
 import type { DocLang } from "@/lib/docs/docLang";
 import type { TocEntry } from "@/lib/docs/renderDoc";
 import { CONNECT_CLIENTS, MCP_URL, connectSnippets, type ConnectClient } from "@/lib/mcp/connectGuide";
+import "./guide.css";
 
 /**
  * `/docs/mcp`: how to add the MCP server to an AI app, quickly. The URL
@@ -22,11 +25,6 @@ import { CONNECT_CLIENTS, MCP_URL, connectSnippets, type ConnectClient } from "@
 
 const SNIPPETS = connectSnippets();
 const COPIED_MS = 1500;
-
-/** Text with backticked runs drawn as code. */
-function Inline({ text }: { text: string }) {
-	return text.split("`").map((part, i) => (i % 2 ? <code key={i}>{part}</code> : part));
-}
 
 /**
  * The copy key inside a code block: a bare icon, the Strum header's kind, that
@@ -98,17 +96,18 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 	return (
 		<>
 			<DocToc entries={entries} label={copy.tocLabel} />
-			<article lang={lang} className="mcp-page">
+			<article lang={lang} className="guide-page">
 				<header>
-					<div className="mcp-title-row">
+					<DocBackLink lang={lang} />
+					<div className="guide-title-row">
 						<h1>{copy.heading}</h1>
 						<DocLangSwitch lang={lang} />
 					</div>
-					<p className="mcp-lead">{copy.lead}</p>
+					<p className="guide-lead">{copy.lead}</p>
 				</header>
 
 				<section className="mcp-url" aria-labelledby="mcp-url-label">
-					<p id="mcp-url-label" className="mcp-caption">
+					<p id="mcp-url-label" className="guide-caption">
 						{copy.urlLabel}
 					</p>
 					<div className="mcp-url-row">
@@ -120,7 +119,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 
 				<section aria-labelledby="mcp-clients">
 					<h2 id="mcp-clients">{copy.clientsHeading}</h2>
-					<div className="mcp-picker">
+					<div className="guide-picker">
 						<Segmented
 							label={copy.clientsLabel}
 							options={CONNECT_CLIENTS.map((c) => ({ value: c, label: copy.clients[c].label }))}
@@ -128,8 +127,8 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 							onChange={setClient}
 						/>
 					</div>
-					<div className="mcp-panel">
-						<ol className="mcp-steps">
+					<div className="guide-panel">
+						<ol className="guide-steps">
 							{guide.steps.map((step, i) => (
 								<li key={i}>
 									<p>
@@ -142,7 +141,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 							))}
 						</ol>
 						{guide.note && (
-							<p className="mcp-note">
+							<p className="guide-note">
 								<Inline text={guide.note} />
 							</p>
 						)}
@@ -151,7 +150,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 
 				<section aria-labelledby="mcp-models">
 					<h2 id="mcp-models">{copy.modelsHeading}</h2>
-					<ul className="mcp-list">
+					<ul className="guide-list">
 						{copy.models.map((line) => (
 							<li key={line}>{line}</li>
 						))}
@@ -163,7 +162,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 					{copy.askGroups.map((group) => (
 						<div key={group.id} className="mcp-ask-group">
 							<h3 id={group.id}>{group.heading}</h3>
-							{group.note && <p className="mcp-caption">{group.note}</p>}
+							{group.note && <p className="guide-caption">{group.note}</p>}
 							<ul className="mcp-asks">
 								{group.requests.map((request) => (
 									<li key={request}>
@@ -178,7 +177,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 
 				<section aria-labelledby="mcp-back">
 					<h2 id="mcp-back">{copy.backHeading}</h2>
-					<ul className="mcp-list">
+					<ul className="guide-list">
 						{copy.back.map((line) => (
 							<li key={line}>
 								<Inline text={line} />
@@ -187,7 +186,7 @@ export default function McpGuide({ lang }: { lang: DocLang }) {
 					</ul>
 				</section>
 
-				<p className="mcp-reference">
+				<p className="guide-reference">
 					{copy.referenceLead}{" "}
 					<a href={MCP_REFERENCE_URL} target="_blank" rel="noopener noreferrer" className={TEXT_LINK}>
 						{copy.referenceLink}

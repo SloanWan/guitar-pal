@@ -101,20 +101,19 @@ describe("playOrder", () => {
 		).toBe("A B1 B2 A C1 C2 D");
 	});
 
-	it("plays Greensleeves as printed: pickup, |: 1–8 [1. 9 :|] [2. 10], |: 11–18 :|", () => {
-		const bars: Measure[] = [m("pickup")];
+	it("plays Greensleeves as printed: pickup 1, |: 2–8 [1. 9 :|] [2. 10], |: 11–18 :|", () => {
+		// Numbered as the page numbers it, the pickup being bar 1.
+		const bars: Measure[] = [];
 		for (let bar = 1; bar <= 18; bar++) {
 			const flags: Partial<Measure> = {};
-			if (bar === 1 || bar === 11) flags.repeatStart = true;
+			if (bar === 2 || bar === 11) flags.repeatStart = true;
 			if (bar === 9) Object.assign(flags, { ending: [1], repeatEnd: true });
 			if (bar === 10) flags.ending = [2];
 			if (bar === 18) flags.repeatEnd = true;
 			bars.push(m(String(bar), flags));
 		}
 		const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, k) => String(a + k));
-		expect(sounds(bars)).toBe(
-			["pickup", ...range(1, 9), ...range(1, 8), "10", ...range(11, 18), ...range(11, 18)].join(" "),
-		);
+		expect(sounds(bars)).toBe(["1", ...range(2, 9), ...range(2, 8), "10", ...range(11, 18), ...range(11, 18)].join(" "));
 	});
 
 	it("errors on a repeat start with no matching end", () => {

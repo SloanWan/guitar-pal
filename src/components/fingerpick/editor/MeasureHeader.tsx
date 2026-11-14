@@ -45,7 +45,11 @@ export default function MeasureHeader({
 
 	return (
 		<div className="te-mb-head">
-			<span className="te-mb-lab">Bar {measureIndex + 1}</span>
+			<span className="te-mb-lab">
+				{measure.repeatStart && <span className="te-mb-rep" title="Repeat start">|:</span>}
+				Bar {measureIndex + 1}
+				{measure.repeatEnd && <span className="te-mb-rep" title="Repeat end">:|</span>}
+			</span>
 			<div className="te-mb-tools">
 				<button
 					type="button"

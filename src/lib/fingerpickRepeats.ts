@@ -8,6 +8,9 @@ export const DEFAULT_REPEAT_TIMES = 2;
 /** The highest pass an ending may name ("8."). */
 export const MAX_ENDING = 8;
 
+/** The passes the editor offers as ending toggles: printed music rarely goes past "4.". */
+export const ENDING_CHOICES = [1, 2, 3, 4] as const;
+
 /** Clamp an authored play-count to the valid [DEFAULT, MAX] integer range. */
 function clampTimes(times: number): number {
 	const n = Math.floor(times);
@@ -25,6 +28,8 @@ export interface PlayOrder {
 	order: number[];
 	/** First markup error (human-readable, naming the bar), or null when the repeats are sound. */
 	error: string | null;
+	/** The bar the error names (0-based), so an editor can say it there. */
+	errorBar: number | null;
 }
 
 /**
@@ -36,11 +41,41 @@ export interface PlayOrder {
 function timesAt(measures: readonly Measure[], i: number): number {
 	const written = measures[i].repeatTimes;
 	if (written !== undefined) return clampTimes(written);
-	if (!measures[i].ending) return DEFAULT_REPEAT_TIMES;
+	return impliedRepeatTimes(measures, i) ?? DEFAULT_REPEAT_TIMES;
+}
+
+/**
+ * The passes a bar among first / second endings implies for its `:|`: the
+ * highest pass named across its run of ending bars (`[1.2. … :|] [3. …]` is
+ * three). Null for a bar under no ending, whose count is written or 2.
+ */
+export function impliedRepeatTimes(measures: readonly Measure[], i: number): number | null {
+	if (!measures[i]?.ending) return null;
 	let highest = 0;
 	for (let j = i; j >= 0 && measures[j].ending; j--) highest = Math.max(highest, ...measures[j].ending!);
 	for (let j = i + 1; j < measures.length && measures[j].ending; j++) highest = Math.max(highest, ...measures[j].ending!);
 	return clampTimes(highest);
+}
+
+/**
+ * The bars with one pass turned on or off in bar `index`'s ending: off
+ * leaves the others, and the last one off takes the ending away. A count
+ * written on the bar goes with a first ending, since the endings set it.
+ */
+export function toggleEnding(measures: readonly Measure[], index: number, pass: number): Measure[] {
+	return measures.map((measure, i) => {
+		if (i !== index) return measure;
+		const passes = new Set(measure.ending ?? []);
+		if (passes.has(pass)) passes.delete(pass);
+		else passes.add(pass);
+		const next: Measure = { ...measure };
+		delete next.ending;
+		if (passes.size > 0) {
+			next.ending = [...passes].sort((a, b) => a - b);
+			delete next.repeatTimes;
+		}
+		return next;
+	});
 }
 
 interface Section {
@@ -83,7 +118,7 @@ export function playOrder(measures: readonly Measure[]): PlayOrder {
 		if (section.endBar >= 0 && i > section.endBar && !measure.ending) section = sectionAt(i);
 		if (measure.repeatStart && !(returned && i === section.start)) {
 			if (section.opened && section.endBar < 0 && i !== section.start) {
-				return { order, error: `Bar ${i + 1}: repeat start inside an open repeat (nested repeats are not supported).` };
+				return { order, error: `Bar ${i + 1}: repeat start inside an open repeat (nested repeats are not supported).`, errorBar: i };
 			}
 			section = sectionAt(i, true);
 		}
@@ -94,7 +129,7 @@ export function playOrder(measures: readonly Measure[]): PlayOrder {
 		}
 		order.push(i);
 		// Every jump spends a pass, so this cannot be reached; it keeps a bad tab from hanging the page.
-		if (order.length > measures.length * MAX_REPEAT_TIMES) return { order, error: "The repeats never end." };
+		if (order.length > measures.length * MAX_REPEAT_TIMES) return { order, error: "The repeats never end.", errorBar: i };
 		if (measure.repeatEnd) {
 			section.endBar = Math.max(section.endBar, i);
 			if (section.pass < timesAt(measures, i)) {
@@ -108,16 +143,16 @@ export function playOrder(measures: readonly Measure[]): PlayOrder {
 		i++;
 	}
 	if (section.opened && section.endBar < 0) {
-		return { order, error: `Bar ${section.start + 1}: repeat start without a matching end.` };
+		return { order, error: `Bar ${section.start + 1}: repeat start without a matching end.`, errorBar: section.start };
 	}
 	const played = new Set(order);
 	const missed = measures.findIndex((_, k) => !played.has(k));
 	if (missed !== -1) {
 		const ending = measures[missed].ending;
 		const what = ending ? `its ending (${endingLabel(ending)}) names a pass its repeat does not play` : "no pass reaches it";
-		return { order, error: `Bar ${missed + 1} is never played: ${what}.` };
+		return { order, error: `Bar ${missed + 1} is never played: ${what}.`, errorBar: missed };
 	}
-	return { order, error: null };
+	return { order, error: null, errorBar: null };
 }
 
 /** The first problem with a tab's repeats and endings, or null when they play. */

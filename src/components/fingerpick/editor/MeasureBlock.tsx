@@ -18,6 +18,7 @@ import {
 import { spanCovers, type PatternIndex } from "@/lib/fingerpickIndex";
 import { chordSymbolLabel, clearString, replaceRowWithHints, rowDiffersFromHints, type FretHint } from "@/lib/fingerpickChords";
 import { techniqueDef } from "@/lib/techniqueRegistry";
+import { endingLabel } from "@/lib/fingerpickRepeats";
 import { PERCUSSION_STRINGS } from "@/lib/fingerpickScheduler";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -167,6 +168,12 @@ function MeasureBlock({
 				onBlank(measureIndex, col ? Number(col.split(":")[1]) : null);
 			}}
 		>
+			{/* The bar's ending, drawn like the stave's bracket along the block's top edge. */}
+			{measure.ending && (
+				<span aria-hidden className="te-mb-volta" data-closed={measure.repeatEnd ? "" : undefined}>
+					{endingLabel(measure.ending)}
+				</span>
+			)}
 			<MeasureHeader
 				measure={measure}
 				measureIndex={measureIndex}

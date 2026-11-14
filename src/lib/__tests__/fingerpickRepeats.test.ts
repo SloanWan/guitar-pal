@@ -4,6 +4,8 @@ import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	endingLabel,
 	expandFingerpickPattern,
+	impliedRepeatTimes,
+	toggleEnding,
 	voltaMarks,
 	mapOriginToExpandedIndex,
 	playOrder,
@@ -141,6 +143,12 @@ describe("playOrder", () => {
 	it("errors on a second ending outside any repeat", () => {
 		expect(playOrder([m("A"), m("B", { ending: [2] })]).error).toMatch(/Bar 2 is never played/);
 	});
+
+	it("says which bar the error is in", () => {
+		expect(playOrder([m("A"), m("B", { ending: [2] })]).errorBar).toBe(1);
+		expect(playOrder([m("A"), m("B", { repeatStart: true })]).errorBar).toBe(1);
+		expect(playOrder([m("A", { repeatEnd: true })]).errorBar).toBeNull();
+	});
 });
 
 describe("endingLabel", () => {
@@ -260,5 +268,34 @@ describe("voltaMarks", () => {
 		]);
 		expect(marks.get("A")).toEqual({ label: "1.2.", closed: true, continues: false });
 		expect(marks.get("B")).toEqual({ label: "1.2.", closed: false, continues: false });
+	});
+});
+
+describe("impliedRepeatTimes", () => {
+	it("is the highest pass across the run of ending bars, and null off an ending", () => {
+		const bars = [m("A", { repeatStart: true }), m("B", { ending: [1, 2], repeatEnd: true }), m("C", { ending: [3] }), m("D")];
+		expect(impliedRepeatTimes(bars, 1)).toBe(3);
+		expect(impliedRepeatTimes(bars, 2)).toBe(3);
+		expect(impliedRepeatTimes(bars, 0)).toBeNull();
+		expect(impliedRepeatTimes(bars, 3)).toBeNull();
+	});
+});
+
+describe("toggleEnding", () => {
+	it("turns a pass on in order, and the last one off takes the ending away", () => {
+		let bars = [m("A"), m("B")];
+		bars = toggleEnding(bars, 1, 2);
+		bars = toggleEnding(bars, 1, 1);
+		expect(bars[1].ending).toEqual([1, 2]);
+		bars = toggleEnding(bars, 1, 2);
+		expect(bars[1].ending).toEqual([1]);
+		bars = toggleEnding(bars, 1, 1);
+		expect("ending" in bars[1]).toBe(false);
+		expect(bars[0]).toBe(bars[0]);
+	});
+
+	it("drops a written count once the bar is under an ending", () => {
+		const bars = toggleEnding([m("A", { repeatEnd: true, repeatTimes: 3 })], 0, 1);
+		expect(bars[0]).toEqual({ id: "A", slots: [], repeatEnd: true, ending: [1] });
 	});
 });

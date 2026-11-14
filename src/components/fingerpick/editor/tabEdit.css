@@ -369,6 +369,13 @@
 		gap: 6px;
 		padding: 2px 4px;
 	}
+	.te-menu-lab {
+		flex: none;
+		margin-right: 2px;
+		color: var(--gp-ink-3);
+		font-size: 12px;
+		font-weight: 650;
+	}
 	/* The repeat count's − / + fit beside the two repeat chips. */
 	.te-menu-row .pb-icon {
 		width: 28px;
@@ -584,7 +591,8 @@
 		flex-direction: column;
 		gap: 8px;
 		min-width: 0;
-		padding: 10px 12px 12px;
+		/* The top keeps room for an ending's bracket on every block, so marking one does not grow it. */
+		padding: 18px 12px 12px;
 		border-radius: var(--gp-r-l);
 		background: var(--gp-card);
 		box-shadow: var(--gp-ring-c);
@@ -643,6 +651,40 @@
 		letter-spacing: 0.12em;
 		text-transform: uppercase;
 		white-space: nowrap;
+	}
+	/* A repeat barline beside the bar's number. */
+	.te-mb-rep {
+		margin: 0 3px;
+		color: var(--gp-m-700);
+		font-family: var(--gp-f-num);
+		font-size: 12px;
+		font-weight: 800;
+		letter-spacing: 0;
+	}
+	/* The bar's ending: a bracket along the block's top edge, its label under the
+	   line, a hook down at the start and, on a :|, at the end — in the padding, so
+	   it takes no room. */
+	.te-mb {
+		position: relative;
+	}
+	.te-mb-volta {
+		position: absolute;
+		top: 6px;
+		left: 10px;
+		right: 10px;
+		height: 10px;
+		padding-left: 4px;
+		border: solid var(--gp-m-500);
+		border-width: 1.5px 0 0 1.5px;
+		color: var(--gp-m-700);
+		font-family: var(--gp-f-num);
+		font-size: 10px;
+		font-weight: 800;
+		line-height: 11px;
+		pointer-events: none;
+	}
+	.te-mb-volta[data-closed] {
+		border-right-width: 1.5px;
 	}
 	.te-mb-div {
 		width: 1px;
@@ -1091,6 +1133,23 @@
 	}
 	.te-mb-times[data-off] {
 		visibility: hidden;
+	}
+	/* The repeats row: |: :| ×n, then the ending's passes, wrapping on a narrow block. */
+	.te-mb-repeats {
+		flex-wrap: wrap;
+	}
+	.te-mb-endings {
+		display: inline-flex;
+		gap: 3px;
+	}
+	.te-mb-endings .te-mb-fill {
+		width: 26px;
+	}
+	.te-mb-warn {
+		margin: 0;
+		color: var(--gp-bad);
+		font-size: 12px;
+		line-height: 1.35;
 	}
 	.te-mb-foot .te-irow {
 		margin: 0;

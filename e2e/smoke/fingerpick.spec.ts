@@ -61,6 +61,35 @@ test("New opens the editor; a named tab saves and the reader opens on it", async
 	await expect(page.getByRole("heading", { name: "Smoke tab" })).toBeVisible();
 });
 
+/** Endings written in the editor (#526): a pass no repeat plays is said on its bar; the reader draws the brackets. */
+test("endings marked in the editor save, and the reader draws their brackets", async ({ page }) => {
+	await page.goto("/tab/edit/new");
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
+	await page.getByRole("button", { name: "Add bar", exact: true }).click();
+	await page.getByRole("button", { name: "Add bar", exact: true }).click();
+
+	await page.getByRole("button", { name: "Repeat start at bar 1" }).click();
+	await page.getByRole("group", { name: "Ending at bar 2" }).getByRole("button", { name: "Ending 1" }).click();
+	await page.getByRole("button", { name: "Repeat end at bar 2" }).click();
+	const third = page.getByRole("group", { name: "Ending at bar 3" });
+	await third.getByRole("button", { name: "Ending 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "Bar 3 is never played" })).toBeVisible();
+	await third.getByRole("button", { name: "Ending 3" }).click();
+	await third.getByRole("button", { name: "Ending 2" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "never played" })).toHaveCount(0);
+
+	await page.getByRole("button", { name: "Tab settings" }).click();
+	await page.getByRole("textbox", { name: "Name" }).fill("Endings tab");
+	await page.keyboard.press("Escape");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+
+	await expect(page).toHaveURL(/\/tab\?pattern=/);
+	const voltas = page.locator("svg .vf-volta");
+	await expect(voltas).toHaveCount(2);
+	await expect(voltas.nth(0)).toContainText("1.");
+	await expect(voltas.nth(1)).toContainText("2.");
+});
+
 test("the progress bar runs, in the tab colour, while the editor loads", async ({ page }) => {
 	await page.goto("/tab");
 	// Hold the route's payload back so the bar outlives its show delay.

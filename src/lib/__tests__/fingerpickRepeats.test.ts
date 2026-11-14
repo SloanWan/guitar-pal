@@ -131,17 +131,66 @@ describe("playOrder", () => {
 		expect(error).toMatch(/Bar 2: .*nested repeats are not supported/);
 	});
 
-	it("errors on an ending naming a pass its repeat does not play", () => {
-		const { error } = playOrder([
+	it("errors on an ending that skips a pass", () => {
+		const { error, errorBar } = playOrder([
 			m("A", { repeatStart: true }),
-			m("B", { ending: [1], repeatEnd: true, repeatTimes: 2 }),
+			m("B", { ending: [1], repeatEnd: true }),
 			m("C", { ending: [3] }),
 		]);
-		expect(error).toMatch(/Bar 3 is never played: its ending \(3\.\)/);
+		expect(error).toMatch(/Bar 3: ending 3\. should be 2\./);
+		expect(errorBar).toBe(2);
 	});
 
-	it("errors on a second ending outside any repeat", () => {
-		expect(playOrder([m("A"), m("B", { ending: [2] })]).error).toMatch(/Bar 2 is never played/);
+	it("errors on a pass given twice", () => {
+		const { error } = playOrder([
+			m("A", { repeatStart: true }),
+			m("B", { ending: [1, 2], repeatEnd: true }),
+			m("C", { ending: [2] }),
+		]);
+		expect(error).toMatch(/Bar 3: ending 2\. should be 3\./);
+	});
+
+	it("errors on a last ending that goes back with :|", () => {
+		const { error, errorBar } = playOrder([
+			m("A", { repeatStart: true }),
+			m("B", { ending: [1], repeatEnd: true }),
+			m("C", { ending: [2], repeatEnd: true }),
+			m("D"),
+		]);
+		expect(error).toMatch(/Bar 3: ending 2\. goes back with :\|, so ending 3\. must start at bar 4; if this is the last ending, take its :\| off/);
+		expect(errorBar).toBe(2);
+	});
+
+	it("errors on a first ending with no second after it", () => {
+		const { error, errorBar } = playOrder([m("A", { repeatStart: true }), m("B", { ending: [1], repeatEnd: true }), m("C")]);
+		expect(error).toMatch(/Bar 2: ending 1\. goes back with :\|, so ending 2\. must start at bar 3/);
+		expect(errorBar).toBe(1);
+	});
+
+	it("errors on an ending followed by another without :|", () => {
+		const { error, errorBar } = playOrder([
+			m("A", { repeatStart: true }),
+			m("B1", { ending: [1] }),
+			m("B2", { ending: [1] }),
+			m("C", { ending: [2] }),
+		]);
+		expect(error).toMatch(/Bar 3: ending 1\. is followed by another ending, so it ends with :\|/);
+		expect(errorBar).toBe(2);
+	});
+
+	it("errors on a :| in the middle of an ending, which starts a new one with the same passes", () => {
+		const { error } = playOrder([
+			m("A", { repeatStart: true }),
+			m("B1", { ending: [1], repeatEnd: true }),
+			m("B2", { ending: [1] }),
+			m("C", { ending: [2] }),
+		]);
+		expect(error).toMatch(/Bar 3: ending 1\. should be 2\./);
+	});
+
+	it("errors on a lone ending", () => {
+		expect(playOrder([m("A"), m("B", { ending: [2] })]).error).toMatch(/Bar 2: ending 2\. should be 1\./);
+		expect(playOrder([m("A"), m("B", { ending: [1] })]).error).toMatch(/Bar 2: an ending comes in a set of two or more/);
 	});
 
 	it("says which bar the error is in", () => {

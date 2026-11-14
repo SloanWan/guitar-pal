@@ -196,7 +196,7 @@ describe("importTab", () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.errors[0].code).toBe("REPEATS_UNPLAYABLE");
-		expect(result.errors[0].message).toMatch(/Bar 3 is never played/);
+		expect(result.errors[0].message).toMatch(/Bar 3: ending 3\. should be 2\./);
 	});
 
 	it("refuses rather than repairs a structural misread", () => {

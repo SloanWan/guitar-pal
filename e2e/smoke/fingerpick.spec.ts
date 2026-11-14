@@ -73,10 +73,15 @@ test("endings marked in the editor save, and the reader draws their brackets", a
 	await page.getByRole("button", { name: "Repeat end at bar 2" }).click();
 	const third = page.getByRole("group", { name: "Ending at bar 3" });
 	await third.getByRole("button", { name: "Ending 3" }).click();
-	await expect(page.getByRole("status").filter({ hasText: "Bar 3 is never played" })).toBeVisible();
+	await expect(page.getByRole("status").filter({ hasText: "Bar 3: ending 3. should be 2." })).toBeVisible();
 	await third.getByRole("button", { name: "Ending 3" }).click();
 	await third.getByRole("button", { name: "Ending 2" }).click();
-	await expect(page.getByRole("status").filter({ hasText: "never played" })).toHaveCount(0);
+	await expect(page.getByRole("status").filter({ hasText: "should be" })).toHaveCount(0);
+	// A :| on the last ending is one too many.
+	await page.getByRole("button", { name: "Repeat end at bar 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "if this is the last ending, take its :| off" })).toBeVisible();
+	await page.getByRole("button", { name: "Repeat end at bar 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "take its :| off" })).toHaveCount(0);
 
 	await page.getByRole("button", { name: "Tab settings" }).click();
 	await page.getByRole("textbox", { name: "Name" }).fill("Endings tab");

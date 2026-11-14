@@ -103,12 +103,14 @@ function sectionAt(start: number, opened = false): Section {
  *    ending sends it back again (`[1. B :|] [2. C :|] [3. D]`);
  *  - the section is over once the music passes its last `:|` and its endings.
  *
- * Errors, each naming its bar: a `|:` inside an open repeat (nesting is not
- * supported), a `|:` never closed, and a bar no pass ever reaches (an ending
- * naming a pass its repeat does not play). On an error, `order` holds what was
- * read before it.
+ * Errors, each naming its bar: endings not written as a page writes them
+ * (`endingsError`), a `|:` inside an open repeat (nesting is not supported), a
+ * `|:` never closed, and a bar no pass ever reaches. On an error, `order`
+ * holds what was read before it.
  */
 export function playOrder(measures: readonly Measure[]): PlayOrder {
+	const endings = endingsError(measures);
+	if (endings) return { order: [], ...endings };
 	const order: number[] = [];
 	let section = sectionAt(0);
 	let returned = false;
@@ -153,6 +155,65 @@ export function playOrder(measures: readonly Measure[]): PlayOrder {
 		return { order, error: `Bar ${missed + 1} is never played: ${what}.`, errorBar: missed };
 	}
 	return { order, error: null, errorBar: null };
+}
+
+interface Ending {
+	/** First and last bar under the bracket. */
+	start: number;
+	end: number;
+	passes: number[];
+}
+
+/**
+ * The first set of endings written the way no page writes them, naming the bar.
+ * A set is a run of consecutive ending bars; an ending in it is a stretch with
+ * the same passes, ended by a `:|`. Every ending but the last goes back with a
+ * `:|` on its last bar, and the next one starts on the very next bar; the last
+ * one goes on, so it has none (a first ending with no second after it is
+ * refused, though some pages print one: the second bracket says the same and
+ * a missing one is far likelier a slip); the passes run 1, 2, 3 … in turn,
+ * each once; and a set has two endings at least.
+ */
+function endingsError(measures: readonly Measure[]): { error: string; errorBar: number } | null {
+	let i = 0;
+	while (i < measures.length) {
+		if (!measures[i].ending) {
+			i++;
+			continue;
+		}
+		const set: Ending[] = [];
+		while (i < measures.length && measures[i].ending) {
+			const label = endingLabel(measures[i].ending!);
+			const start = i;
+			while (!measures[i].repeatEnd && i + 1 < measures.length && measures[i + 1].ending && endingLabel(measures[i + 1].ending!) === label) i++;
+			set.push({ start, end: i, passes: [...measures[start].ending!].sort((a, b) => a - b) });
+			i++;
+		}
+		let next = 1;
+		for (const [k, ending] of set.entries()) {
+			const label = endingLabel(ending.passes);
+			const expected = endingLabel(ending.passes.map((_, n) => next + n));
+			if (label !== expected) {
+				return { error: `Bar ${ending.start + 1}: ending ${label} should be ${expected}, the endings taking the passes in turn.`, errorBar: ending.start };
+			}
+			next += ending.passes.length;
+			const last = k === set.length - 1;
+			const goesBack = measures[ending.end].repeatEnd === true;
+			if (!last && !goesBack) {
+				return { error: `Bar ${ending.end + 1}: ending ${label} is followed by another ending, so it ends with :|.`, errorBar: ending.end };
+			}
+			if (last && goesBack) {
+				return {
+					error: `Bar ${ending.end + 1}: ending ${label} goes back with :|, so ending ${next}. must start at bar ${ending.end + 2}; if this is the last ending, take its :| off.`,
+					errorBar: ending.end,
+				};
+			}
+			if (last && set.length === 1) {
+				return { error: `Bar ${ending.start + 1}: an ending comes in a set of two or more, the first one going back with :|.`, errorBar: ending.start };
+			}
+		}
+	}
+	return null;
 }
 
 /** The first problem with a tab's repeats and endings, or null when they play. */

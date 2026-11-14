@@ -1,0 +1,586 @@
+/*
+ * The add-to-home-screen demo (#525): a drawn phone beside its steps. The
+ * screen holds every layer at once — browser bars, share sheet or menu, the
+ * confirmation, the home screen, the app — and `data-frame` on the phone picks
+ * which show, so they slide rather than mount. The frame is the piano's black
+ * key, dark in both themes. Reduced motion keeps every state and drops the
+ * movement.
+ */
+@layer components {
+	.idm {
+		container-type: inline-size;
+	}
+
+	.idm-body {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+	}
+
+	.idm-phone {
+		flex: none;
+		width: 168px;
+		height: 340px;
+		padding: 6px;
+		border-radius: 28px;
+		background: var(--gp-key-black);
+		box-shadow: 0 0 0 1px var(--gp-line);
+	}
+
+	.idm-screen {
+		position: relative;
+		height: 100%;
+		overflow: hidden;
+		border-radius: 22px;
+		background: var(--gp-page);
+		font-family: var(--gp-f-body);
+		color: var(--gp-ink);
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	.idm-screen svg {
+		width: 12px;
+		height: 12px;
+		flex: none;
+	}
+
+	.idm-screen img {
+		display: block;
+	}
+
+	/* ---- the status bar and the browser's bars --------------------------------------- */
+
+	.idm-status {
+		position: absolute;
+		inset: 0 0 auto;
+		z-index: 6;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		height: 22px;
+		padding: 0 16px;
+		font: 650 9.5px/1 var(--gp-f-num);
+	}
+
+	.idm-status-r svg {
+		width: 11px;
+		height: 11px;
+	}
+
+	.idm-bar {
+		position: absolute;
+		inset-inline: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		height: 30px;
+		padding: 0 6px;
+		background: var(--gp-sheet);
+		transition:
+			translate var(--gp-d-sheet) var(--gp-ease-out),
+			opacity var(--gp-d-state) linear;
+	}
+
+	.idm-bar-top {
+		top: 22px;
+		box-shadow: 0 1px 0 var(--gp-line);
+	}
+
+	.idm-bar-bottom {
+		bottom: 0;
+		height: 36px;
+		padding-bottom: 6px;
+		box-shadow: 0 -1px 0 var(--gp-line);
+	}
+
+	.idm-url {
+		flex: 1;
+		min-width: 0;
+		padding: 4px 8px;
+		overflow: hidden;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-well);
+		font-size: 8px;
+		color: var(--gp-ink-2);
+		text-align: center;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.idm-key {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		color: var(--gp-ink-2);
+	}
+
+	/* Home screen and the app opened from it: no browser. */
+	.idm-phone:is([data-frame="3"], [data-frame="4"]) .idm-bar-top {
+		translate: 0 -150%;
+		opacity: 0;
+	}
+	.idm-phone:is([data-frame="3"], [data-frame="4"]) .idm-bar-bottom {
+		translate: 0 110%;
+		opacity: 0;
+	}
+
+	/* ---- the app ---------------------------------------------------------------------- */
+
+	.idm-app {
+		position: absolute;
+		inset: 22px 0 36px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 10px 12px;
+		transition: inset var(--gp-d-sheet) var(--gp-ease-out);
+	}
+	.idm-phone[data-platform="android"] .idm-app {
+		inset: 52px 0 0;
+	}
+	.idm-phone[data-frame="4"] .idm-app {
+		inset: 22px 0 0;
+	}
+
+	.idm-app-head {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.idm-app-head img {
+		width: 16px;
+		height: 16px;
+		border-radius: 5px;
+	}
+	.idm-app-head i,
+	.idm-app-title,
+	.idm-app-line {
+		display: block;
+		height: 6px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-s2);
+	}
+	.idm-app-head i {
+		width: 44px;
+	}
+	.idm-app-title {
+		width: 70%;
+		height: 9px;
+		margin-top: 4px;
+		background: var(--gp-ink);
+	}
+	.idm-app-line.idm-short {
+		width: 60%;
+	}
+
+	.idm-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 4px;
+		padding: 8px;
+		border-radius: 10px;
+		background: var(--gp-card);
+		box-shadow: var(--gp-ring-c);
+	}
+	.idm-grid span {
+		display: grid;
+		place-items: center;
+		height: 26px;
+		border-radius: 6px;
+		background: var(--gp-strum-100);
+		font: 700 11px/1 var(--gp-f-num);
+		color: var(--gp-strum-700);
+	}
+
+	.idm-play {
+		display: grid;
+		place-items: center;
+		align-self: center;
+		width: 30px;
+		height: 30px;
+		margin-top: auto;
+		margin-bottom: 4px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-strum-500);
+		color: var(--gp-on-ink);
+	}
+	.idm-play svg {
+		width: 13px;
+		height: 13px;
+		fill: currentColor;
+	}
+
+	/* ---- the share sheet, the menu and the confirmation -------------------------------- */
+
+	.idm-scrim {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		background: var(--gp-scrim);
+		opacity: 0;
+		transition: opacity var(--gp-d-state) linear;
+	}
+	.idm-phone:is([data-frame="1"], [data-frame="2"]) .idm-scrim {
+		opacity: 1;
+	}
+
+	.idm-row {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		height: 28px;
+		padding: 0 10px;
+		border-radius: 8px;
+		font-size: 9.5px;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.idm-row-on {
+		padding-right: 32px;
+		background: var(--gp-well);
+	}
+
+	.idm-sheet,
+	.idm-confirm {
+		position: absolute;
+		inset-inline: 0;
+		bottom: 0;
+		z-index: 4;
+		padding: 10px 8px 14px;
+		border-radius: 16px 16px 0 0;
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop);
+		translate: 0 105%;
+		transition: translate var(--gp-d-sheet) var(--gp-ease-out);
+	}
+	.idm-confirm {
+		top: 30px;
+		padding: 10px 12px;
+	}
+	.idm-phone[data-frame="1"] .idm-sheet,
+	.idm-phone[data-frame="2"] .idm-confirm {
+		translate: 0 0;
+	}
+
+	.idm-confirm-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: 9.5px;
+		color: var(--gp-ink-2);
+	}
+	.idm-confirm-go {
+		position: relative;
+		padding: 3px 6px;
+		font-weight: 700;
+		color: var(--gp-m-700);
+	}
+	.idm-confirm-body {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 14px;
+		padding: 10px;
+		border-radius: 10px;
+		background: var(--gp-well);
+		font-size: 11px;
+		font-weight: 650;
+	}
+	.idm-confirm-body img,
+	.idm-dialog img {
+		width: 34px;
+		height: 34px;
+		border-radius: 9px;
+	}
+
+	.idm-menu {
+		position: absolute;
+		top: 26px;
+		right: 6px;
+		z-index: 4;
+		width: 132px;
+		padding: 5px;
+		border-radius: 10px;
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop);
+		opacity: 0;
+		scale: 0.9;
+		transform-origin: top right;
+		transition:
+			opacity var(--gp-d-state) linear,
+			scale var(--gp-d-pop) var(--gp-ease-out);
+	}
+	.idm-phone[data-frame="1"] .idm-menu {
+		opacity: 1;
+		scale: 1;
+	}
+
+	.idm-dialog {
+		position: absolute;
+		inset-inline: 14px;
+		top: 50%;
+		z-index: 4;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 4px;
+		padding: 14px 10px 8px;
+		border-radius: 14px;
+		background: var(--gp-sheet);
+		box-shadow: var(--gp-shadow-pop);
+		font-size: 9.5px;
+		color: var(--gp-ink-2);
+		opacity: 0;
+		translate: 0 -50%;
+		scale: 0.92;
+		transition:
+			opacity var(--gp-d-state) linear,
+			scale var(--gp-d-pop) var(--gp-ease-out);
+	}
+	.idm-dialog > b {
+		margin-top: 4px;
+		font-size: 11px;
+		color: var(--gp-ink);
+	}
+	.idm-dialog-keys {
+		display: flex;
+		align-self: stretch;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 8px;
+		margin-top: 8px;
+	}
+	.idm-phone[data-frame="2"] .idm-dialog {
+		opacity: 1;
+		scale: 1;
+	}
+
+	/* ---- the home screen --------------------------------------------------------------- */
+
+	.idm-home {
+		position: absolute;
+		inset: 0;
+		z-index: 5;
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		align-content: start;
+		gap: 16px 10px;
+		padding: 40px 14px 0;
+		background: linear-gradient(160deg, var(--gp-strum-100), var(--gp-chords-100) 55%, var(--gp-fb-100));
+		opacity: 0;
+		transition: opacity var(--gp-d-state) linear;
+	}
+	.idm-phone[data-frame="3"] .idm-home {
+		opacity: 1;
+	}
+
+	.idm-tile {
+		display: block;
+		aspect-ratio: 1;
+		border-radius: 9px;
+		background: var(--gp-card);
+		opacity: 0.7;
+	}
+
+	.idm-mine {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+	}
+	.idm-mine b {
+		font-size: 7px;
+		font-weight: 650;
+		white-space: nowrap;
+	}
+	.idm-mine-icon {
+		position: relative;
+		width: 100%;
+	}
+	.idm-mine-icon img {
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 9px;
+		box-shadow: 0 2px 6px rgba(18, 20, 24, 0.18);
+	}
+
+	/* ---- the finger ---------------------------------------------------------------------- */
+
+	.idm-tap {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		z-index: 1;
+		width: 24px;
+		height: 24px;
+		margin: -12px 0 0 -12px;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--gp-ink) 22%, transparent);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--gp-ink) 35%, transparent);
+		pointer-events: none;
+	}
+	/* The row and the button hold their finger at the end, where the label is not. */
+	.idm-row > .idm-tap {
+		left: auto;
+		right: 6px;
+		margin-left: 0;
+	}
+
+	/* ---- the steps ---------------------------------------------------------------------- */
+
+	.idm-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.idm-step {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		min-height: 38px;
+		padding: 6px 10px 6px 6px;
+		border-radius: var(--gp-r-m);
+		font-size: var(--gp-t-ui);
+		line-height: 1.3;
+		color: var(--gp-ink-3);
+		text-align: left;
+		cursor: pointer;
+		transition:
+			color var(--gp-d-state) linear,
+			background-color var(--gp-d-state) linear;
+	}
+	.idm-step:hover {
+		color: var(--gp-ink);
+	}
+	.idm-step[aria-current="step"] {
+		background: var(--gp-well);
+		color: var(--gp-ink);
+		font-weight: 600;
+	}
+
+	.idm-step-n {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: var(--gp-r-pill);
+		background: var(--gp-s2);
+		font: 650 12px/1 var(--gp-f-num);
+		color: var(--gp-ink-2);
+		transition:
+			background-color var(--gp-d-state) linear,
+			color var(--gp-d-state) linear;
+	}
+	.idm-step[aria-current="step"] .idm-step-n {
+		background: var(--gp-ink);
+		color: var(--gp-on-ink);
+	}
+
+	/* A narrow card: the phone shrinks a little rather than squeezing the steps. */
+	@container (max-width: 360px) {
+		.idm-body {
+			gap: 12px;
+		}
+		.idm-step {
+			gap: 8px;
+			padding-right: 4px;
+			font-size: var(--gp-t-cap);
+		}
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		.idm-tap {
+			animation: idm-tap 900ms 700ms var(--gp-ease-out) both;
+		}
+
+		.idm-phone[data-frame="3"] .idm-mine-icon img {
+			animation: idm-pop 520ms 250ms var(--gp-ease-out) both;
+		}
+
+		.idm-phone[data-frame="4"] .idm-grid span {
+			animation: idm-beat 1600ms calc(var(--i) * 200ms) steps(1) infinite;
+		}
+
+		.idm-phone[data-frame="4"] .idm-play {
+			animation: idm-pulse 800ms ease-in-out infinite alternate;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.idm-bar,
+		.idm-app,
+		.idm-scrim,
+		.idm-sheet,
+		.idm-confirm,
+		.idm-menu,
+		.idm-dialog,
+		.idm-home {
+			transition: opacity 150ms linear;
+		}
+		/* Still frames: the beat shows lit, the way it plays. */
+		.idm-phone[data-frame="4"] .idm-grid span:nth-child(-n + 3) {
+			background: var(--gp-strum-500);
+			color: var(--gp-on-ink);
+		}
+	}
+
+	@keyframes idm-tap {
+		0% {
+			opacity: 0;
+			scale: 1.6;
+		}
+		45% {
+			opacity: 1;
+			scale: 1;
+		}
+		70% {
+			scale: 0.8;
+		}
+		100% {
+			opacity: 1;
+			scale: 1;
+		}
+	}
+
+	@keyframes idm-pop {
+		0% {
+			opacity: 0;
+			scale: 0.3;
+		}
+		70% {
+			opacity: 1;
+			scale: 1.12;
+		}
+		100% {
+			scale: 1;
+		}
+	}
+
+	@keyframes idm-beat {
+		0%,
+		12.5% {
+			background: var(--gp-strum-500);
+			color: var(--gp-on-ink);
+		}
+		12.6%,
+		100% {
+			background: var(--gp-strum-100);
+			color: var(--gp-strum-700);
+		}
+	}
+
+	@keyframes idm-pulse {
+		to {
+			scale: 1.08;
+		}
+	}
+}

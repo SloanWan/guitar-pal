@@ -662,8 +662,8 @@
 		letter-spacing: 0;
 	}
 	/* The bar's ending: a bracket along the block's top edge, its label under the
-	   line, a hook down at the start and, on a :|, at the end — in the padding, so
-	   it takes no room. */
+	   line, a hook down where it begins and where it ends — in the padding, so it
+	   takes no room. */
 	.te-mb {
 		position: relative;
 	}
@@ -675,7 +675,7 @@
 		height: 10px;
 		padding-left: 4px;
 		border: solid var(--gp-m-500);
-		border-width: 1.5px 0 0 1.5px;
+		border-width: 1.5px 0 0;
 		color: var(--gp-m-700);
 		font-family: var(--gp-f-num);
 		font-size: 10px;
@@ -683,7 +683,10 @@
 		line-height: 11px;
 		pointer-events: none;
 	}
-	.te-mb-volta[data-closed] {
+	.te-mb-volta[data-starts] {
+		border-left-width: 1.5px;
+	}
+	.te-mb-volta[data-ends] {
 		border-right-width: 1.5px;
 	}
 	.te-mb-div {

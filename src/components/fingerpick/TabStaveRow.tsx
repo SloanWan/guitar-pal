@@ -135,7 +135,7 @@ const WHAMMY_LINE_BELOW = 10;
 const WHAMMY_LINE_DROP = 14;
 const WHAMMY_FONT_SIZE = 9;
 // First / second endings: a solid line over the whole row's chord line, its label
-// under it at the bracket's start, a hook down where it begins and where it closes.
+// under it at the bracket's start, a hook down where it begins and where it ends.
 // The line sits at least VOLTA_RISE over the top line, and a band clear of the
 // chord symbols (and their shapes) when they reach higher.
 const VOLTA_RISE = 46;
@@ -713,7 +713,7 @@ function drawVolta(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mark
 	const begins = mark.label !== null;
 	let d = begins ? `M ${x1} ${y + VOLTA_HOOK} L ${x1} ${y}` : `M ${x1} ${y}`;
 	d += ` L ${x2} ${y}`;
-	if (mark.closed) d += ` L ${x2} ${y + VOLTA_HOOK}`;
+	if (!mark.continues) d += ` L ${x2} ${y + VOLTA_HOOK}`;
 	const line = document.createElementNS(ns, "path");
 	line.setAttribute("d", d);
 	line.setAttribute("fill", "none");

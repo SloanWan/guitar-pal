@@ -246,7 +246,7 @@ describe("mapOriginToExpandedIndex", () => {
 });
 
 describe("voltaMarks", () => {
-	it("labels a bracket at its first bar, closes a first ending and leaves the final one open", () => {
+	it("labels a bracket at its first bar and closes every ending at its last bar, the final one too", () => {
 		const marks = voltaMarks([
 			m("A", { repeatStart: true }),
 			m("B1", { ending: [1] }),
@@ -255,9 +255,9 @@ describe("voltaMarks", () => {
 			m("D"),
 		]);
 		expect(marks.has("A")).toBe(false);
-		expect(marks.get("B1")).toEqual({ label: "1.", closed: false, continues: true });
-		expect(marks.get("B2")).toEqual({ label: null, closed: true, continues: false });
-		expect(marks.get("C")).toEqual({ label: "2.", closed: false, continues: false });
+		expect(marks.get("B1")).toEqual({ label: "1.", continues: true });
+		expect(marks.get("B2")).toEqual({ label: null, continues: false });
+		expect(marks.get("C")).toEqual({ label: "2.", continues: false });
 		expect(marks.has("D")).toBe(false);
 	});
 
@@ -266,8 +266,8 @@ describe("voltaMarks", () => {
 			m("A", { ending: [1, 2], repeatEnd: true }),
 			m("B", { ending: [2, 1] }),
 		]);
-		expect(marks.get("A")).toEqual({ label: "1.2.", closed: true, continues: false });
-		expect(marks.get("B")).toEqual({ label: "1.2.", closed: false, continues: false });
+		expect(marks.get("A")).toEqual({ label: "1.2.", continues: false });
+		expect(marks.get("B")).toEqual({ label: "1.2.", continues: false });
 	});
 });
 

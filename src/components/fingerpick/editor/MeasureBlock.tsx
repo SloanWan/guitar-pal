@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { CornerDownLeft, Plus, X as XIcon } from "lucide-react";
 import type { BeatSlot, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
@@ -18,7 +18,7 @@ import {
 import { spanCovers, type PatternIndex } from "@/lib/fingerpickIndex";
 import { chordSymbolLabel, clearString, replaceRowWithHints, rowDiffersFromHints, type FretHint } from "@/lib/fingerpickChords";
 import { techniqueDef } from "@/lib/techniqueRegistry";
-import { endingLabel } from "@/lib/fingerpickRepeats";
+import { voltaMarks } from "@/lib/fingerpickRepeats";
 import { PERCUSSION_STRINGS } from "@/lib/fingerpickScheduler";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -127,6 +127,7 @@ function MeasureBlock({
 	const [quickChordAt, setQuickChordAt] = useState<number | null>(null);
 	const [nudge, setNudge] = useState<"left" | "right" | null>(null);
 	const ts = working.timeSignature;
+	const volta = useMemo(() => voltaMarks(working.measures), [working.measures]).get(measure.id);
 	const selectedSet = new Set(selected ? selected.split(",").map(Number) : []);
 	const pickedSet = new Set(picked ? picked.split(",") : []);
 	const beatLabels = computeBeatLabels(measure.slots, ts, countEighths ? "eighths" : "beats");
@@ -168,10 +169,16 @@ function MeasureBlock({
 				onBlank(measureIndex, col ? Number(col.split(":")[1]) : null);
 			}}
 		>
-			{/* The bar's ending, drawn like the stave's bracket along the block's top edge. */}
-			{measure.ending && (
-				<span aria-hidden className="te-mb-volta" data-closed={measure.repeatEnd ? "" : undefined}>
-					{endingLabel(measure.ending)}
+			{/* The bar's ending, drawn like the stave's bracket along the block's top edge:
+			    labelled and hooked where it begins, hooked where it ends. */}
+			{volta && (
+				<span
+					aria-hidden
+					className="te-mb-volta"
+					data-starts={volta.label !== null ? "" : undefined}
+					data-ends={volta.continues ? undefined : ""}
+				>
+					{volta.label}
 				</span>
 			)}
 			<MeasureHeader

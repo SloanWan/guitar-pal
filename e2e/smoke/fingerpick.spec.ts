@@ -14,6 +14,34 @@ test("fingerpick renders a tab stave and plays", { tag: "@phone" }, async ({ pag
 	await playAndStop(page, "Pause");
 });
 
+/** First and second endings (#523): a bracket over each, the first closed on its :|, the second left open. */
+test("a tab with first and second endings draws their brackets", async ({ page }) => {
+	const bar = (id: string, extra: Record<string, unknown> = {}) => ({
+		id,
+		slots: [0, 1, 2, 3].map((n) => ({
+			id: `${id}-${n}`,
+			duration: "quarter",
+			strings: Array.from({ length: 6 }, (_, s) => ({ fret: s === 0 ? n : null, muted: false })),
+		})),
+		...extra,
+	});
+	const tab = {
+		id: "custom-endings",
+		name: "Endings",
+		schemaVersion: 2,
+		bpm: 90,
+		timeSignature: [4, 4],
+		measures: [bar("a", { repeatStart: true }), bar("b", { ending: [1], repeatEnd: true }), bar("c", { ending: [2] })],
+	};
+	await page.addInitScript((t) => localStorage.setItem("customFingerpickPatterns", JSON.stringify([t])), tab);
+	await page.goto(`/tab?pattern=${tab.id}`);
+
+	const voltas = page.locator("svg .vf-volta");
+	await expect(voltas).toHaveCount(2);
+	await expect(voltas.nth(0)).toContainText("1.");
+	await expect(voltas.nth(1)).toContainText("2.");
+});
+
 /**
  * The editor is a page of its own (#358). Signed out, a saved tab goes to the
  * browser, so nothing here is written anywhere but this test's storage.

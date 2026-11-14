@@ -189,3 +189,39 @@ export function mapOriginToExpandedIndex(
 	const idx = originMeasureIndices.indexOf(originIndex);
 	return idx === -1 ? originIndex : idx;
 }
+
+/** How a bar's stretch of an ending's bracket is drawn. */
+export interface VoltaMark {
+	/** The bracket's label ("1.", "1.2.") where it begins; null where it carries on from the bar before. */
+	label: string | null;
+	/** It ends over this bar with a hook down, where a `:|` sends the music back; a final ending is left open. */
+	closed: boolean;
+	/** It goes on over the next bar. */
+	continues: boolean;
+}
+
+function sameEnding(a: Measure, b: Measure): boolean {
+	return a.ending !== undefined && b.ending !== undefined && endingLabel(a.ending) === endingLabel(b.ending);
+}
+
+/**
+ * Each ending bar's part of its bracket, by measure id. Consecutive bars with
+ * the same passes share one bracket, labelled at its first bar; it closes
+ * with a hook where it ends on a `:|` and stays open on a final ending, as
+ * printed. Built from the whole tab so a bracket carries across a row break.
+ */
+export function voltaMarks(measures: readonly Measure[]): Map<string, VoltaMark> {
+	const marks = new Map<string, VoltaMark>();
+	measures.forEach((measure, i) => {
+		if (!measure.ending) return;
+		const prev = measures[i - 1];
+		const next = measures[i + 1];
+		const continues = next !== undefined && sameEnding(measure, next) && !measure.repeatEnd;
+		marks.set(measure.id, {
+			label: prev !== undefined && sameEnding(prev, measure) && !prev.repeatEnd ? null : endingLabel(measure.ending),
+			closed: !continues && measure.repeatEnd === true,
+			continues,
+		});
+	});
+	return marks;
+}

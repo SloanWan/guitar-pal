@@ -4,6 +4,7 @@ import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	endingLabel,
 	expandFingerpickPattern,
+	voltaMarks,
 	mapOriginToExpandedIndex,
 	playOrder,
 } from "@/lib/fingerpickRepeats";
@@ -234,5 +235,31 @@ describe("mapOriginToExpandedIndex", () => {
 
 	it("falls back to the input index when unmapped", () => {
 		expect(mapOriginToExpandedIndex([0, 1, 2], 5)).toBe(5);
+	});
+});
+
+describe("voltaMarks", () => {
+	it("labels a bracket at its first bar, closes a first ending and leaves the final one open", () => {
+		const marks = voltaMarks([
+			m("A", { repeatStart: true }),
+			m("B1", { ending: [1] }),
+			m("B2", { ending: [1], repeatEnd: true }),
+			m("C", { ending: [2] }),
+			m("D"),
+		]);
+		expect(marks.has("A")).toBe(false);
+		expect(marks.get("B1")).toEqual({ label: "1.", closed: false, continues: true });
+		expect(marks.get("B2")).toEqual({ label: null, closed: true, continues: false });
+		expect(marks.get("C")).toEqual({ label: "2.", closed: false, continues: false });
+		expect(marks.has("D")).toBe(false);
+	});
+
+	it("starts a new bracket after a repeat end even with the same passes", () => {
+		const marks = voltaMarks([
+			m("A", { ending: [1, 2], repeatEnd: true }),
+			m("B", { ending: [2, 1] }),
+		]);
+		expect(marks.get("A")).toEqual({ label: "1.2.", closed: true, continues: false });
+		expect(marks.get("B")).toEqual({ label: "1.2.", closed: false, continues: false });
 	});
 });

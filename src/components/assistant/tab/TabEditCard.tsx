@@ -14,6 +14,7 @@ import type { TabTurnOutcome } from "@/lib/assistant/tab/turn";
 import { moveSlotChord } from "@/lib/fingerpickChords";
 import type { Measure } from "@/lib/fingerpickTypes";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { voltaMarks } from "@/lib/fingerpickRepeats";
 import { useNavRouter } from "@/components/nav-progress";
 
 /**
@@ -52,7 +53,7 @@ export default function TabEditCard({
 	// The pattern's settings over the bars alone: what "Hear it" plays.
 	const heard = useMemo(() => ({ ...edit.pattern, measures }), [edit.pattern, measures]);
 	// Where the bars' spans lie, for the preview's brackets; the bars keep the pattern's slot ids.
-	const renderContext = useMemo(() => ({ index: indexPattern(heard) }), [heard]);
+	const renderContext = useMemo(() => ({ index: indexPattern(heard), voltas: voltaMarks(heard.measures) }), [heard]);
 	const audition = useTabAudition(heard);
 	const [moved, setMoved] = useState(false);
 	const more = bars ? measures.length - shown : 0;

@@ -172,6 +172,33 @@ describe("importTab", () => {
 		expect(result.pattern.measures[1]).toMatchObject({ repeatEnd: true, repeatTimes: 3 });
 	});
 
+	it("carries first and second endings through, played on their passes", () => {
+		const result = importTab(
+			input({
+				bars: [
+					{ ...AM_BAR, repeatStart: true },
+					{ ...AM_BAR, ending: [1], repeatEnd: true },
+					{ ...AM_BAR, ending: [2] },
+				],
+			}),
+			INDEX,
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.pattern.measures.map((m) => m.ending)).toEqual([undefined, [1], [2]]);
+	});
+
+	it("sends back repeats that do not play, naming the bar", () => {
+		const result = importTab(
+			input({ bars: [{ ...AM_BAR, repeatStart: true }, { ...AM_BAR, ending: [1], repeatEnd: true }, { ...AM_BAR, ending: [3] }] }),
+			INDEX,
+		);
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.errors[0].code).toBe("REPEATS_UNPLAYABLE");
+		expect(result.errors[0].message).toMatch(/Bar 3 is never played/);
+	});
+
 	it("refuses rather than repairs a structural misread", () => {
 		const result = importTab(input({ timeSignature: "3/4" }), INDEX);
 		expect(result.ok).toBe(false);
@@ -182,12 +209,16 @@ describe("importTab", () => {
 
 describe("patternToImportBars", () => {
 	it("round-trips a pattern through the tool's bars", () => {
-		const first = importTab(input({ bars: [{ ...AM_BAR, repeatEnd: true }] }), INDEX);
+		const first = importTab(
+			input({ bars: [{ ...AM_BAR, repeatEnd: true, ending: [1] }, { ...AM_BAR, ending: [2] }] }),
+			INDEX,
+		);
 		expect(first.ok).toBe(true);
 		if (!first.ok) return;
 		const bars = patternToImportBars(first.pattern);
 		expect(bars[0].slots[0]).toEqual({ duration: "eighth", notes: [{ string: 5, fret: 0 }], chord: "Am" });
-		expect(bars[0].repeatEnd).toBe(true);
+		expect(bars[0]).toMatchObject({ repeatEnd: true, ending: [1] });
+		expect(bars[1].ending).toEqual([2]);
 		const second = importTab(input({ bars }), INDEX);
 		expect(second.ok).toBe(true);
 		if (!second.ok) return;

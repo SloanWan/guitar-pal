@@ -5,8 +5,9 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { proposeStrum, proposeTab } from "@/lib/assistant/general/execute";
 import { proposalToPattern } from "@/lib/assistant/strum/buildProposal";
 import type { AssistantProposal } from "@/lib/assistant/types";
-import type { FingerpickPattern } from "@/lib/fingerpickTypes";
+import type { FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { patternCapo } from "@/lib/fingerpickChords";
+import { playOrder } from "@/lib/fingerpickRepeats";
 import { isShareId, SHARE_ID_LENGTH, sharePath, type SharedItem, type SharedStrum } from "@/lib/sharedItems";
 import { patternBpm, patternMeter } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel, SUPPORTED_METERS } from "@/lib/strumMeter";
@@ -133,8 +134,27 @@ export function describeFingerpick(pattern: FingerpickPattern): string {
 		`Name: ${pattern.name}`,
 		`${meterLabel(pattern.timeSignature)}, ${beatUnitGlyph(pattern.timeSignature)} = ${pattern.bpm}, ${pattern.measures.length} bar${pattern.measures.length === 1 ? "" : "s"}${capo > 0 ? `, capo ${capo}` : ""}`,
 		...(pattern.description ? [pattern.description] : []),
+		...playsLine(pattern.measures),
 	];
 	return `${header.join("\n")}\n\n${patternToAsciiTab(pattern)}`;
+}
+
+/**
+ * The bars in the order they sound, when the repeats make it differ from the
+ * page ("Plays bars 1–9, 1–8, 10"), so a model can check its barlines and
+ * endings against the piece.
+ */
+function playsLine(measures: readonly Measure[]): string[] {
+	const { order, error } = playOrder(measures);
+	if (error) return [];
+	if (order.length === measures.length && order.every((origin, k) => origin === k)) return [];
+	const runs: [number, number][] = [];
+	for (const origin of order) {
+		const last = runs[runs.length - 1];
+		if (last && origin === last[1] + 1) last[1] = origin;
+		else runs.push([origin, origin]);
+	}
+	return [`Plays bars ${runs.map(([a, b]) => (a === b ? `${a + 1}` : `${a + 1}–${b + 1}`)).join(", ")}`];
 }
 
 /**
@@ -281,7 +301,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"import_tab",
 		{
 			...titled("Import a transcribed tab", WRITE_ANNOTATIONS),
-			description: `Use this when the player shares a photo, screenshot or scan of a guitar tab and wants to play it, hear it or bring it into Guitar Pal. Not for composing (that is propose_tab), nor for a question about what the image shows. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in \`uncertain\` — the player checks those against the original. The app validates the durations against the meter and bounds the frets; it cannot tell a note on the wrong string, so be exact about strings. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
+			description: `Use this when the player shares a photo, screenshot or scan of a guitar tab and wants to play it, hear it or bring it into Guitar Pal. Not for composing (that is propose_tab), nor for a question about what the image shows. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in \`uncertain\` — the player checks those against the original. Write repeat barlines (|: and :|) and first / second endings (the "1." / "2." brackets) on the bars that carry them, once each, as printed: never write a repeat out. The app validates the durations against the meter, bounds the frets and checks that the repeats play; it cannot tell a note on the wrong string, so be exact about strings. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
 			inputSchema: IMPORT_TAB_SHAPE,
 		},
 		async (input) => {

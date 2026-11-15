@@ -128,9 +128,17 @@ export type Measure = {
 	repeatEnd?: boolean;
 	/**
 	 * Total times the repeated section ENDING at this measure is played (default 2 =
-	 * one loop-back). Only meaningful together with `repeatEnd`.
+	 * one loop-back). Only meaningful together with `repeatEnd`. Absent on a bar
+	 * inside first / second endings, the passes the endings name set the count.
 	 */
 	repeatTimes?: number;
+	/**
+	 * The passes of its repeat this bar is played on: `[1]` under a "1." bracket,
+	 * `[2]` under "2.", `[1, 2]` under "1.2.". Consecutive bars with the same
+	 * passes share one bracket. Absent on a bar played every pass. Read through
+	 * `playOrder` in fingerpickRepeats.ts, never on its own.
+	 */
+	ending?: number[];
 };
 
 export type FingerpickPattern = {

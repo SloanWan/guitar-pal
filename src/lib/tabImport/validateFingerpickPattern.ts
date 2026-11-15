@@ -10,6 +10,7 @@ import { migratePattern } from "./migratePattern";
 import { FINGERPICK_SCHEMA_VERSION } from "@/lib/fingerpickTypes";
 import { normalizeCapo } from "@/lib/strumProgressions";
 import { readReferences } from "@/lib/tabReferences";
+import { MAX_ENDING } from "@/lib/fingerpickRepeats";
 import {
 	effectsSchema,
 	isEffectKind,
@@ -433,7 +434,16 @@ function validateMeasure(
 			measure.repeatTimes = times;
 		}
 	}
+	const ending = readEnding(obj.ending);
+	if (ending) measure.ending = ending;
 	return measure;
+}
+
+/** An ending's passes, sorted and once each; null unless every one is a pass 1–`MAX_ENDING`. */
+function readEnding(raw: unknown): number[] | null {
+	if (!Array.isArray(raw) || raw.length === 0) return null;
+	if (!raw.every((pass) => typeof pass === "number" && Number.isInteger(pass) && pass >= 1 && pass <= MAX_ENDING)) return null;
+	return [...new Set(raw as number[])].sort((a, b) => a - b);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

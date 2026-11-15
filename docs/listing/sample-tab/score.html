@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+	html, body { margin: 0; background: #fff; }
+	#page { width: 1240px; padding: 40px 0 50px; background: #fff; }
+</style>
+<script src="../../../node_modules/vexflow/build/cjs/vexflow-bravura.js"></script>
+</head>
+<body>
+<div id="page"><div id="score"></div></div>
+<script>
+// Greensleeves (traditional), melody and bass for guitar, numbered as the
+// arrangement it was copied from numbers it: the pickup is bar 1.
+// A slot is [duration, string, fret]; durations q, 8, 16, plus "d" for dotted.
+// bass: the two dotted-quarter bass notes [string, fret] at beats 1 and 2.
+const B2 = { mel: [["q", 2, 1], ["8", 2, 3], ["8d", 1, 0], ["16", 1, 1], ["8", 1, 0]], bass: [[5, 0], [5, 0]], chords: { 0: "Am" } };
+const B3 = { mel: [["q", 2, 3], ["8", 2, 0], ["8d", 3, 0], ["16", 3, 2], ["8", 2, 0]], bass: [[6, 3], [6, 0]], chords: { 0: "G", 2: "Em" } };
+const B4 = { mel: [["q", 2, 1], ["8", 3, 2], ["8d", 3, 2], ["16", 3, 1], ["8", 3, 2]], bass: [[5, 0], [6, 1]], chords: { 0: "Am", 2: "F" } };
+const B5 = { mel: [["q", 2, 0], ["8", 3, 1], ["q", 4, 2], ["8", 3, 2]], bass: [[6, 0], [6, 0]], chords: { 0: "E" } };
+const B8 = { mel: [["8d", 2, 1], ["16", 2, 0], ["8", 3, 2], ["8d", 3, 1], ["16", 4, 4], ["8", 3, 1]], bass: [[5, 0], [6, 0]], chords: { 0: "Am", 3: "E" } };
+const B11 = { mel: [["qd", 1, 3], ["8d", 1, 3], ["16", 1, 1], ["8", 1, 0]], bass: [[5, 3], [5, 3]], chords: { 0: "C" } };
+const LAST = { mel: [["qd", 3, 2], ["qd", 3, 2]], bass: [[5, 0], [5, 0]] };
+
+const bars = {
+	1: { mel: [["8", 3, 2]], bass: null },
+	2: { ...B2, repeatStart: true },
+	3: B3,
+	4: B4,
+	5: B5,
+	6: B2,
+	7: B3,
+	8: B8,
+	9: { mel: [["qd", 3, 2], ["q", 3, 2], ["8", 3, 2]], bass: [[5, 0], [5, 0]], chords: { 0: "Am" }, ending: "1.", repeatEnd: true },
+	10: { ...LAST, ending: "2." },
+	11: { ...B11, repeatStart: true },
+	12: B3,
+	13: B4,
+	14: { mel: [["q", 2, 0], ["8", 3, 1], ["qd", 4, 2]], bass: [[6, 0], [6, 0]], chords: { 0: "E" } },
+	15: B11,
+	16: B3,
+	17: B8,
+	18: { ...LAST, chords: { 0: "Am" }, repeatEnd: true },
+};
+const systems = [[1, 2, 3, 4, 5], [6, 7, 8, 9], [10, 11, 12, 13], [14, 15, 16, 17, 18]];
+
+const VF = VexFlow;
+const { Renderer, Stave, TabStave, StaveNote, TabNote, Voice, Formatter, Beam, Accidental, Dot, StaveConnector, Barline, Fraction } = VF;
+
+const OPEN = { 1: 64, 2: 59, 3: 55, 4: 50, 5: 45, 6: 40 };
+const NAMES = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"];
+// Guitar is written an octave above where it sounds.
+function key(string, fret) {
+	const midi = OPEN[string] + fret + 12;
+	return `${NAMES[midi % 12]}/${Math.floor(midi / 12) - 1}`;
+}
+const TICKS = { q: 24, qd: 36, "8": 12, "8d": 18, "16": 6 };
+function base(d) { return d.replace("d", ""); }
+function dotted(d) { return d.endsWith("d") && d !== "d"; }
+
+async function draw() {
+await document.fonts.load("30px Bravura");
+await document.fonts.load("30px Academico").catch(() => {});
+const PAGE_W = 1240, LEFT = 70, RIGHT = 1180;
+const SYS_H = 285, TOP = 140;
+const div = document.getElementById("score");
+const renderer = new Renderer(div, Renderer.Backends.SVG);
+renderer.resize(PAGE_W, TOP + systems.length * SYS_H + 10);
+const ctx = renderer.getContext();
+const svg = div.querySelector("svg");
+const NS = "http://www.w3.org/2000/svg";
+function text(x, y, str, size, opts = {}) {
+	const t = document.createElementNS(NS, "text");
+	t.setAttribute("x", x); t.setAttribute("y", y);
+	t.setAttribute("font-size", size);
+	t.setAttribute("font-family", "Times New Roman, Times, serif");
+	if (opts.anchor) t.setAttribute("text-anchor", opts.anchor);
+	if (opts.weight) t.setAttribute("font-weight", opts.weight);
+	t.setAttribute("fill", "#000");
+	t.textContent = str;
+	svg.appendChild(t);
+}
+function line(x1, y1, x2, y2) {
+	const l = document.createElementNS(NS, "path");
+	l.setAttribute("d", `M ${x1} ${y1} L ${x2} ${y2}`);
+	l.setAttribute("stroke", "#000"); l.setAttribute("stroke-width", "1.2"); l.setAttribute("fill", "none");
+	svg.appendChild(l);
+}
+
+text(PAGE_W / 2, 62, "Greensleeves", 34, { anchor: "middle" });
+text(RIGHT, 98, "Traditional", 15, { anchor: "end" });
+
+systems.forEach((nums, si) => {
+	const y = TOP + si * SYS_H;
+	const first = si === 0;
+	const head = first ? 95 : 60;
+	const weights = nums.map((n) => (n === 1 ? 1.2 : 1.6 + bars[n].mel.length * 0.55));
+	const total = weights.reduce((a, b) => a + b, 0);
+	let x = LEFT;
+	nums.forEach((n, i) => {
+		const bar = bars[n];
+		const w = ((RIGHT - LEFT - head) * weights[i]) / total + (i === 0 ? head : 0);
+		const staff = new Stave(x, y, w);
+		const tab = new TabStave(x, y + 105, w);
+		if (i === 0) {
+			staff.addClef("treble", "default", "8vb");
+			tab.addTabGlyph();
+			if (first) staff.addTimeSignature("6/8");
+		}
+		if (bar.repeatStart) { staff.setBegBarType(Barline.type.REPEAT_BEGIN); tab.setBegBarType(Barline.type.REPEAT_BEGIN); }
+		if (bar.repeatEnd) { staff.setEndBarType(Barline.type.REPEAT_END); tab.setEndBarType(Barline.type.REPEAT_END); }
+		if (first && i === 0) staff.setTempo({ duration: "q", dots: 1, bpm: 50 }, -22);
+		staff.setContext(ctx).draw();
+		tab.setContext(ctx).draw();
+		if (i === 0) {
+			new StaveConnector(staff, tab).setType("singleLeft").setContext(ctx).draw();
+			if (!first) text(x - 4, y + 22, String(n), 13, { anchor: "end" });
+		}
+
+		const melNotes = [], tabNotes = [];
+		let tick = 0;
+		bar.mel.forEach(([d, s, f]) => {
+			const sn = new StaveNote({ keys: [key(s, f)], duration: base(d), dots: dotted(d) ? 1 : 0, stemDirection: 1 });
+			if (dotted(d)) Dot.buildAndAttach([sn], { all: true });
+			melNotes.push(sn);
+			const positions = [{ str: s, fret: f }];
+			if (bar.bass && (tick === 0 || tick === 36)) {
+				const [bs, bf] = bar.bass[tick === 0 ? 0 : 1];
+				positions.push({ str: bs, fret: bf });
+			}
+			tabNotes.push(new TabNote({ positions, duration: base(d), dots: dotted(d) ? 1 : 0 }));
+			tick += TICKS[d];
+		});
+		const beats = n === 1 ? 1 : 6;
+		const mel = new Voice({ numBeats: beats, beatValue: 8 }).setMode(Voice.Mode.SOFT).addTickables(melNotes);
+		const tabV = new Voice({ numBeats: beats, beatValue: 8 }).setMode(Voice.Mode.SOFT).addTickables(tabNotes);
+		const voices = [mel];
+		if (bar.bass) {
+			const bassNotes = bar.bass.map(([s, f]) => {
+				const sn = new StaveNote({ keys: [key(s, f)], duration: "q", dots: 1, stemDirection: -1 });
+				Dot.buildAndAttach([sn], { all: true });
+				return sn;
+			});
+			voices.push(new Voice({ numBeats: 6, beatValue: 8 }).setMode(Voice.Mode.SOFT).addTickables(bassNotes));
+		}
+		Accidental.applyAccidentals(voices, "C");
+		const beams = Beam.generateBeams(melNotes, { groups: [new Fraction(3, 8)], maintainStemDirections: true });
+		const fmt = new Formatter();
+		fmt.joinVoices(voices).joinVoices([tabV]);
+		const noteW = Math.min(staff.getNoteEndX(), tab.getNoteEndX()) - Math.max(staff.getNoteStartX(), tab.getNoteStartX()) - 14;
+		fmt.format([...voices, tabV], noteW);
+		voices.forEach((v) => v.draw(ctx, staff));
+		tabV.draw(ctx, tab);
+		beams.forEach((b) => b.setContext(ctx).draw());
+
+		// Chord names on one line over the staff, at their notes.
+		Object.entries(bar.chords ?? {}).forEach(([slot, name]) => {
+			text(melNotes[Number(slot)].getAbsoluteX() - 2, y + 4, name, 17);
+		});
+		// First / second endings: a bracket over the bar, hooked at both ends.
+		if (bar.ending) {
+			const by = y - 42, bx1 = x + 4, bx2 = x + w - 4;
+			line(bx1, by + 14, bx1, by); line(bx1, by, bx2, by); line(bx2, by, bx2, by + 14);
+			text(bx1 + 5, by + 15, bar.ending, 15, { weight: "bold" });
+		}
+		x += w;
+	});
+});
+window.scoreReady = true;
+}
+draw();
+</script>
+</body>
+</html>

@@ -149,7 +149,7 @@ export default function EditorInspector({ working, commit, cursor, slots, notes,
 	const pick = pickOf(working, slots);
 	const pickable = runSounds(working, slots);
 	const restAll = slots.length > 0 && slots.every((t) => working.measures[t.measureIndex]?.slots[t.slotIndex]?.isRest === true);
-	const fill = measure ? barFill(measure, working.timeSignature) : null;
+	const fill = measure ? barFill(measure, working.timeSignature, m === 0 && working.measures.length > 1) : null;
 	// The shape's frets under each slot of the cursor's bar, for snapping to them.
 	const hintFor = (slotIndex: number) => chordTools.hintsAt(m, slotIndex);
 	const rowOff = measure ? rowDiffersFromHints(measure, cursor.stringIndex, hintFor) : false;

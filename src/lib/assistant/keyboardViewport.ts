@@ -25,6 +25,8 @@ export interface VisibleArea {
 	height: number;
 	/** Whether a keyboard is taking the rest. */
 	keyboard: boolean;
+	/** How much of the window the keyboard takes, its bar included; 0 without one. */
+	keyboardHeight: number;
 }
 
 /**
@@ -39,12 +41,19 @@ export function visibleArea(sample: ViewportSample): VisibleArea {
 	// Pinch zoom shrinks the visual viewport's height by its scale as well; only
 	// what is still missing at full scale is taken by a keyboard.
 	const missing = sample.layoutHeight - sample.vvHeight * sample.vvScale;
-	return { top: sample.vvOffsetTop, height: sample.vvHeight, keyboard: missing > KEYBOARD_MIN_PX };
+	const keyboard = missing > KEYBOARD_MIN_PX;
+	return { top: sample.vvOffsetTop, height: sample.vvHeight, keyboard, keyboardHeight: keyboard ? Math.round(missing) : 0 };
 }
 
 /** Two areas the panel would lay out the same for. */
 export function sameArea(a: VisibleArea | null, b: VisibleArea): boolean {
-	return a !== null && a.keyboard === b.keyboard && Math.abs(a.top - b.top) < 1 && Math.abs(a.height - b.height) < 1;
+	return (
+		a !== null &&
+		a.keyboard === b.keyboard &&
+		Math.abs(a.top - b.top) < 1 &&
+		Math.abs(a.height - b.height) < 1 &&
+		Math.abs(a.keyboardHeight - b.keyboardHeight) < 1
+	);
 }
 
 export interface PanelFit {

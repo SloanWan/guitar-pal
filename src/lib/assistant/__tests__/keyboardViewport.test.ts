@@ -7,6 +7,7 @@ describe("visibleArea", () => {
 			top: 0,
 			height: 844,
 			keyboard: false,
+			keyboardHeight: 0,
 		});
 	});
 
@@ -17,25 +18,32 @@ describe("visibleArea", () => {
 			top: 300,
 			height: 508,
 			keyboard: true,
+			keyboardHeight: 336,
 		});
 	});
 
 	it("takes a toolbar coming back for chrome, not a keyboard", () => {
-		expect(visibleArea({ vvHeight: 790, vvOffsetTop: 0, vvScale: 1, layoutHeight: 844 }).keyboard).toBe(false);
+		expect(visibleArea({ vvHeight: 790, vvOffsetTop: 0, vvScale: 1, layoutHeight: 844 })).toMatchObject({
+			keyboard: false,
+			keyboardHeight: 0,
+		});
 	});
 
 	it("takes pinch zoom for zoom, not a keyboard", () => {
 		expect(visibleArea({ vvHeight: 422, vvOffsetTop: 200, vvScale: 2, layoutHeight: 844 }).keyboard).toBe(false);
 		// zoomed in with the keyboard up as well
-		expect(visibleArea({ vvHeight: 254, vvOffsetTop: 200, vvScale: 2, layoutHeight: 844 }).keyboard).toBe(true);
+		expect(visibleArea({ vvHeight: 254, vvOffsetTop: 200, vvScale: 2, layoutHeight: 844 })).toMatchObject({
+			keyboard: true,
+			keyboardHeight: 336,
+		});
 	});
 });
 
 describe("sameArea", () => {
-	const area = { top: 0, height: 508, keyboard: true };
+	const area = { top: 0, height: 508, keyboard: true, keyboardHeight: 336 };
 
 	it("ignores sub-pixel jitter", () => {
-		expect(sameArea(area, { top: 0.4, height: 508.6, keyboard: true })).toBe(true);
+		expect(sameArea(area, { top: 0.4, height: 508.6, keyboard: true, keyboardHeight: 336.4 })).toBe(true);
 	});
 
 	it("tells a move, a resize and the keyboard apart", () => {
@@ -43,6 +51,7 @@ describe("sameArea", () => {
 		expect(sameArea(area, { ...area, top: 20 })).toBe(false);
 		expect(sameArea(area, { ...area, height: 400 })).toBe(false);
 		expect(sameArea(area, { ...area, keyboard: false })).toBe(false);
+		expect(sameArea(area, { ...area, keyboardHeight: 300 })).toBe(false);
 	});
 });
 

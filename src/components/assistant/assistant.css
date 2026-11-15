@@ -35,7 +35,7 @@
 	outline: none;
 	animation: as-full-in var(--gp-d-state) var(--gp-ease-state);
 }
-/* The keyboard covers the home indicator; its inset would only be a gap above the keys. */
+/* The keyboard covers the home indicator: the launcher pads by the keyboard instead. */
 .as-full[data-keyboard] {
 	padding-bottom: 0;
 }

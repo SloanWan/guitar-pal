@@ -373,8 +373,19 @@ export default function AssistantLauncher() {
 							className="as-pop as-full"
 							aria-describedby={undefined}
 							// The visible area — above the keyboard while it is up. Until the
-							// first measure, the window (assistant.css).
-							style={viewport ? { top: viewport.top, height: viewport.height } : undefined}
+							// first measure, the window (assistant.css). The sheet runs on under
+							// the keyboard, padded by its height so the composer still sits on
+							// it: iOS's keyboard and its bar are translucent, and what shows
+							// through them is the panel, never the page behind.
+							style={
+								viewport
+									? {
+											top: viewport.top,
+											height: viewport.height + viewport.keyboardHeight,
+											paddingBottom: keyboard ? viewport.keyboardHeight : undefined,
+										}
+									: undefined
+							}
 							onEscapeKeyDown={onEscapeKeyDown}
 							// The dialog itself takes focus, not its first button or field: a
 							// field would raise the keyboard over a panel opened to be read.

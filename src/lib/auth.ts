@@ -84,6 +84,10 @@ export async function updateProfileMetadata(fields: {
 	if (fields.avatarColor !== undefined) data[AVATAR_COLOR_KEY] = fields.avatarColor;
 	if (fields.avatarIcon !== undefined) data[AVATAR_ICON_KEY] = fields.avatarIcon;
 	const { data: result, error } = await supabase.auth.updateUser({ data });
+	// The server reads the header's name and avatar from the token's claims
+	// (#536), which keep what they were signed with: a fresh token carries the
+	// change before the caller refreshes the page. Saved either way.
+	if (!error) await supabase.auth.refreshSession().catch(() => undefined);
 	return { data: result, error };
 }
 

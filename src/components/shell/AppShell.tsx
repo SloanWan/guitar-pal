@@ -1,5 +1,6 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { profileOf } from "@/lib/profile";
+import { sessionUser } from "@/lib/sessionUser";
 import BrandLink from "@/components/BrandLink";
 import SignInLink from "@/components/SignInLink";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -22,9 +23,8 @@ import PointerFocusRelease from "./PointerFocusRelease";
  */
 export default async function AppShell({ hideSignIn = false, children }: { hideSignIn?: boolean; children: React.ReactNode }) {
 	const supabase = await createSupabaseServer();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
+	// Verified from the token, not asked of Supabase (#536): the proxy has just refreshed it.
+	const user = await sessionUser(supabase.auth);
 	// Resolved here, on the server, so the client surfaces receive a small view
 	// model rather than the whole auth user.
 	const profile = user ? profileOf(user) : null;

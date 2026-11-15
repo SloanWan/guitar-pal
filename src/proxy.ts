@@ -1,10 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 import { safeRedirectPath } from "@/lib/safeRedirect";
+import { sessionUser } from "@/lib/sessionUser";
 
 export async function proxy(request: NextRequest) {
 	const { pathname } = request.nextUrl;
-	const response = NextResponse.next();
+	let response = NextResponse.next({ request });
 
 	const supabase = createServerClient(
 		process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,7 +15,12 @@ export async function proxy(request: NextRequest) {
 				getAll() {
 					return request.cookies.getAll();
 				},
+				// A refreshed session goes onto the request as well as the response,
+				// so the page this hands on reads the fresh token rather than
+				// refreshing a second time with the old one (#536).
 				setAll(cookiesToSet) {
+					cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+					response = NextResponse.next({ request });
 					cookiesToSet.forEach(({ name, value, options }) =>
 						response.cookies.set(name, value, options),
 					);
@@ -23,7 +29,8 @@ export async function proxy(request: NextRequest) {
 		},
 	);
 
-	// Refresh the session cookie on every matched request. The refreshed cookies
+	// Refresh the session cookie on every matched request, verifying it locally
+	// (`sessionUser`: no round trip to Supabase while the token is fresh). The refreshed cookies
 	// live on `response`; when we redirect instead, copy them across so the
 	// refreshed session isn't dropped (Supabase SSR gotcha).
 	//
@@ -31,11 +38,9 @@ export async function proxy(request: NextRequest) {
 	// is treated as signed out rather than thrown: the public pages still
 	// render, and the signed-in ones bounce to /auth with a return path, which
 	// beats a 500 on every route until the connection comes back.
-	let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] = null;
+	let user: Awaited<ReturnType<typeof sessionUser>> = null;
 	try {
-		({
-			data: { user },
-		} = await supabase.auth.getUser());
+		user = await sessionUser(supabase.auth);
 	} catch (error) {
 		console.warn("[proxy] could not reach Supabase to check the session; treating as signed out:", error);
 	}

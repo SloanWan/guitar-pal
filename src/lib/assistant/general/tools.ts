@@ -45,6 +45,17 @@ const PROPOSED_NOTE_SCHEMA = jsonSchemaOf(
 /** A bar's |: :| and ending, the JSON schema of the fields `import_tab` takes too. */
 const REPEAT_BAR_PROPERTIES = (jsonSchemaOf(z.object(REPEAT_BAR_SHAPE)) as { properties: Record<string, unknown> }).properties;
 
+/** A chord name over a slot, for both `propose_tab`s. */
+export const PROPOSED_CHORD_SHAPE = {
+	slot: z.number().int().min(0).describe("The slot of this bar the chord is written over: one a note (or hit) is struck on."),
+	name: z.string().max(20).describe('The chord name as written, such as "Am" or "G7"; "N.C." for no chord (the melody alone until the next chord).'),
+};
+const PROPOSED_CHORD_SCHEMA = jsonSchemaOf(z.object(PROPOSED_CHORD_SHAPE));
+
+/** What a bar's `chords` are, for both `propose_tab`s. */
+export const PROPOSED_CHORDS_DESCRIPTION =
+	"Chord names over this bar, when the music has them: a text tab's chord line, or the chords a composition is written over. Each sits on the slot of the note it is over and holds until the next one, across barlines.";
+
 /** What `pickupSlots` means, for both `propose_tab`s. */
 export const PICKUP_SLOTS_DESCRIPTION =
 	"Only when the music opens on a pickup (an upbeat before the first full bar): how many slots of a bar it holds, the last ones. Bar 1 is then that short, its notes' slots counted from 0 within it, and it leads straight into bar 2. Leave it out when bar 1 is full; never write a pickup as a full bar that starts with silence.";
@@ -103,6 +114,8 @@ export interface ProposeTabInput {
 			letRing?: boolean;
 		}[];
 		hits?: { slot: number; kind: string }[];
+		/** Chord names over slots of the bar, as written; "N.C." for no chord. */
+		chords?: { slot: number; name: string }[];
 		repeatStart?: boolean;
 		repeatEnd?: boolean;
 		repeatTimes?: number;
@@ -212,6 +225,11 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 								type: "array",
 								description: "Right-hand hits on slots of this bar, when the music has them: a slap of the strings, a thumb slap, a tap on the body.",
 								items: PROPOSED_HIT_SCHEMA,
+							},
+							chords: {
+								type: "array",
+								description: PROPOSED_CHORDS_DESCRIPTION,
+								items: PROPOSED_CHORD_SCHEMA,
 							},
 							...REPEAT_BAR_PROPERTIES,
 						},

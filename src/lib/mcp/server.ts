@@ -15,7 +15,7 @@ import { patternNotation } from "@/lib/strumNotation";
 import { patternRhythm } from "@/lib/strumRhythm";
 import { chordAbbreviation, progressionCapo } from "@/lib/strumProgressions";
 import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, REPEAT_BAR_SHAPE, type ValidationIssue } from "@/lib/tabImport";
-import { PICKUP_SLOTS_DESCRIPTION } from "@/lib/assistant/general/tools";
+import { PICKUP_SLOTS_DESCRIPTION, PROPOSED_CHORDS_DESCRIPTION, PROPOSED_CHORD_SHAPE } from "@/lib/assistant/general/tools";
 import { patternToAsciiTab } from "./asciiTab";
 import { IMPORT_TAB_SHAPE, importTab, patternToImportBars } from "./importTab";
 
@@ -279,6 +279,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 								.max(96)
 								.optional()
 								.describe("Right-hand hits on slots of this bar, when the music has them."),
+							chords: z.array(z.object(PROPOSED_CHORD_SHAPE)).max(96).optional().describe(PROPOSED_CHORDS_DESCRIPTION),
 							...REPEAT_BAR_SHAPE,
 						}),
 					)
@@ -291,7 +292,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 			},
 		},
 		async ({ name, slotsPerBar, bars, bpm, timeSignature, pickupSlots }) => {
-			const built = proposeTab({ name, slotsPerBar, bars, bpm, timeSignature, ...(pickupSlots !== undefined ? { pickupSlots } : {}) });
+			const built = proposeTab({ name, slotsPerBar, bars, bpm, timeSignature, ...(pickupSlots !== undefined ? { pickupSlots } : {}) }, await deps.chordIndex());
 			if (built.isError || !built.card || !("tabProposal" in built.card)) return text(built.result, true);
 			const { pattern, warnings } = built.card.tabProposal;
 			const saved = await save({ kind: "fingerpick", pattern });

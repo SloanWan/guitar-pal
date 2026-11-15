@@ -240,6 +240,22 @@ describe("the server over a client", () => {
 		expect(saved.pattern.measures[0].slots.map((slot) => slot.duration)).toEqual(["eighth"]);
 	});
 
+	it("propose_tab: chord names are marked and shown on the chord line", async () => {
+		const client = await open(deps);
+		const r = await call(client, "propose_tab", {
+			name: "Chords",
+			slotsPerBar: 4,
+			bars: [{ notes: [0, 1, 2, 3].map((slot) => ({ string: 3, fret: 2, slot })), chords: [{ slot: 0, name: "Am" }, { slot: 2, name: "G" }] }],
+			bpm: 80,
+			timeSignature: "",
+		});
+		expect(r.isError).toBeUndefined();
+		expect(textOf(r)).toMatch(/\n {2}Am +G\n/);
+		const saved = rows.get("share00001");
+		if (saved?.kind !== "fingerpick") throw new Error("not saved");
+		expect(saved.pattern.measures[0].slots.map((slot) => slot.chord?.root ?? null)).toEqual(["A", null, "G", null]);
+	});
+
 	it("propose_tab: repeats that do not play come back as an error naming the bar", async () => {
 		const client = await open(deps);
 		const bar = { notes: [{ string: 3, fret: 0, slot: 0 }] };

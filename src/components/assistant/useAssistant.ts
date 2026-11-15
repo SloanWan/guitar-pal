@@ -643,7 +643,7 @@ export function useAssistant() {
 						case "propose_strum":
 							return proposeStrum(input as ProposeStrumInput, index);
 						case "propose_tab":
-							return proposeTab(input as ProposeTabInput);
+							return proposeTab(input as ProposeTabInput, index);
 						case "show_chord":
 							return showChord(input as ShowChordInput, index);
 					}

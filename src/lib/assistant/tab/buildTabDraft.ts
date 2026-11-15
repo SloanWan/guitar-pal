@@ -1,7 +1,9 @@
 import type { Link, NoteEffects, Percussion } from "@/lib/fingerpickTypes";
-import { MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
+import { DURATION_TICKS, MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import { plainDurationForTicks } from "@/lib/fingerpickPickSequence";
-import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, type ImportedTabDraft, type RepeatBarInput } from "@/lib/tabImport";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
+import type { ChordRef } from "@/lib/strumPatterns";
+import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, resolveChordName, type ImportedTabDraft, type RepeatBarInput } from "@/lib/tabImport";
 import { LINK_KINDS, PERCUSSION_KINDS, isLinkKind, isPercussionKind } from "@/lib/techniqueRegistry";
 import { barSlots, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
@@ -41,9 +43,16 @@ export interface ProposedHit {
 	kind: string;
 }
 
+/** A chord name over a slot of the bar, as written; "N.C." for no chord. */
+export interface ProposedChord {
+	slot: number;
+	name: string;
+}
+
 export interface ProposedBar extends RepeatBarInput {
 	notes: ProposedNote[];
 	hits?: ProposedHit[];
+	chords?: ProposedChord[];
 }
 
 export interface BuildTabDraftInput {
@@ -56,10 +65,13 @@ export interface BuildTabDraftInput {
 	 * (`pickupLead`). Absent, every bar is full.
 	 */
 	pickupSlots?: number;
+	/** The library a chord name is looked up in (`resolveChordName`). */
+	chordIndex?: readonly ChordIndexEntry[];
 }
 
 export type BuildTabDraftResult =
-	| { ok: true; draft: ImportedTabDraft }
+	/** `warnings`: chord names the library lacks, left off, each naming its bar. */
+	| { ok: true; draft: ImportedTabDraft; warnings: string[] }
 	| { ok: false; error: string };
 
 /** The effects map as the model wrote it, or why it cannot be taken. */
@@ -123,7 +135,8 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 	}
 
 	const capacity = measureCapacity(timeSignature);
-	const measures: ({ slots: ReturnType<typeof barSlots>["slots"] } & RepeatBarInput)[] = [];
+	const measures: ({ slots: (ReturnType<typeof barSlots>["slots"][number] & { chord?: ChordRef })[] } & RepeatBarInput)[] = [];
+	const warnings: string[] = [];
 
 	for (const [index, bar] of bars.entries()) {
 		const where = `Bar ${index + 1}`;
@@ -179,10 +192,35 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 			hits.set(hit.slot, { kind: hit.kind });
 		}
 
-		// A bar is exactly its slots, so `barSlots` cannot overflow here. Its
-		// barlines and ending ride along for the validator and `playOrder`.
+		// A bar is exactly its slots, so `barSlots` cannot overflow here.
+		const slots: (ReturnType<typeof barSlots>["slots"][number] & { chord?: ChordRef })[] = barSlots(byPosition, positions, barCapacity, hits).slots;
+
+		// A chord mark sits on the slot struck at its position, as import_tab's does.
+		for (const mark of bar.chords ?? []) {
+			if (!Number.isInteger(mark.slot) || mark.slot < 0 || mark.slot >= positions) {
+				return { ok: false, error: `${where} has a chord on slot ${mark.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
+			}
+			if (!byPosition.has(mark.slot) && !hits.has(mark.slot)) {
+				return { ok: false, error: `${where} has the chord "${mark.name}" on slot ${mark.slot}, where nothing is struck; put it on the slot of the note it is written over.` };
+			}
+			const chord = resolveChordName(mark.name, input.chordIndex ?? []);
+			if (!chord) {
+				warnings.push(`${where}: the library has no chord called "${mark.name}"; the mark was left off.`);
+				continue;
+			}
+			const tick = Math.round((mark.slot / positions) * barCapacity / DURATION_TICKS["32nd"]) * DURATION_TICKS["32nd"];
+			let at = 0;
+			const target = slots.find((slot) => {
+				const starts = at === tick;
+				at += DURATION_TICKS[slot.duration];
+				return starts;
+			});
+			if (target) target.chord = chord;
+		}
+
+		// Its barlines and ending ride along for the validator and `playOrder`.
 		measures.push({
-			slots: barSlots(byPosition, positions, barCapacity, hits).slots,
+			slots,
 			...(bar.repeatStart ? { repeatStart: true } : {}),
 			...(bar.repeatEnd ? { repeatEnd: true } : {}),
 			...(bar.repeatEnd && bar.repeatTimes !== undefined ? { repeatTimes: bar.repeatTimes } : {}),
@@ -190,5 +228,5 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 		});
 	}
 
-	return { ok: true, draft: { timeSignature, measures } };
+	return { ok: true, draft: { timeSignature, measures }, warnings };
 }

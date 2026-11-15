@@ -30,6 +30,7 @@ import { useUser } from "@/hooks/useUser";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { chordSymbolLabel, effectiveChords, patternCapo } from "@/lib/fingerpickChords";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { voltaMarks } from "@/lib/fingerpickRepeats";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
 import type { SharedFingerpick } from "@/lib/sharedItems";
@@ -108,7 +109,7 @@ export default function TabPage({ shared }: { shared?: SharedFingerpick }) {
 	const prefs = useFingerpickPrefs();
 	const chordLine = useChordLine(pattern, prefs, user, loading);
 	// Where the tab's spans lie, for the staves' brackets and lead-in arcs.
-	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern), voltas: voltaMarks(pattern.measures) }), [pattern]);
 
 	// The sheet's width packs the bars into rows; the cursor and the section are drawn inside it.
 	const viewerRef = useRef<HTMLDivElement | null>(null);

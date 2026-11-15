@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
-import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
+import { expandFingerpickPattern, voltaMarks } from "@/lib/fingerpickRepeats";
 import { indexPattern } from "@/lib/fingerpickIndex";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { shouldRunPageShortcut } from "@/lib/keyboardShortcuts";
@@ -49,7 +49,7 @@ export function useDraftPlayback(pattern: FingerpickPattern) {
 		observer.observe(viewerEl);
 		return () => observer.disconnect();
 	}, [viewerEl]);
-	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern), voltas: voltaMarks(pattern.measures) }), [pattern]);
 	const rows = useMemo(
 		() => layoutMeasureRows(pattern.measures, width, 0, undefined, renderContext),
 		[pattern.measures, width, renderContext],

@@ -37,6 +37,7 @@ import { chordSymbolLabel } from "@/lib/fingerpickChords";
 import { TRIPLET_GROUP_SIZE, isDottedDuration, tripletGroups } from "@/lib/fingerpickEdit";
 import { indexPattern, slurredInside, type PatternIndex } from "@/lib/fingerpickIndex";
 import { WHAMMY_SEMITONES } from "@/lib/fingerpickExpression";
+import type { VoltaMark } from "@/lib/fingerpickRepeats";
 import { isCompound, type Meter } from "@/lib/strumMeter";
 import type { ChordRef } from "@/lib/strumPatterns";
 import { EFFECT_STACK_ORDER, techniqueDef } from "@/lib/techniqueRegistry";
@@ -539,6 +540,8 @@ export interface LeadIn {
 /** What the converter needs beyond the measure: where the pattern's spans lie, and what comes before the measure. */
 export interface RenderContext {
 	index: PatternIndex;
+	/** The endings' brackets across the whole tab (`voltaMarks`), so one carries over a row break. */
+	voltas?: ReadonlyMap<string, VoltaMark>;
 }
 
 export interface VexFlowRenderData {

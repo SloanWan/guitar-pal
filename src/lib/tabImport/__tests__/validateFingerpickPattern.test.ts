@@ -338,6 +338,19 @@ describe("validateFingerpickPattern — measure/slot repair", () => {
 		expect(pattern?.measures[3].repeatTimes).toBeUndefined();
 	});
 
+	it("keeps an ending's passes, sorted once each, and drops junk", () => {
+		const raw = makePattern({
+			measures: [
+				{ ...makeMeasure([makeSlot()], "m1"), ending: [2, 1, 2] },
+				{ ...makeMeasure([makeSlot()], "m2"), ending: [0] },
+				{ ...makeMeasure([makeSlot()], "m3"), ending: ["1"] },
+				{ ...makeMeasure([makeSlot()], "m4"), ending: [] },
+			],
+		});
+		const { pattern } = validateFingerpickPattern(raw);
+		expect(pattern?.measures.map((m) => m.ending)).toEqual([[1, 2], undefined, undefined, undefined]);
+	});
+
 	it("keeps a real capo and folds junk to no capo", () => {
 		expect(validateFingerpickPattern(makePattern({ capo: 3 })).pattern?.capo).toBe(3);
 		expect(validateFingerpickPattern(makePattern({ capo: 0 })).pattern?.capo).toBeUndefined();

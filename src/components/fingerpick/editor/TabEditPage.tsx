@@ -28,7 +28,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useUser } from "@/hooks/useUser";
 import { cropUrl, setExerciseStatus } from "@/lib/books/api";
 import { STRING_LABELS, clonePatternForEdit, makeDefaultPattern, setFret, setInactive, type Cell, type SlotTarget } from "@/lib/fingerpickEdit";
-import { deriveRepeatDirectives } from "@/lib/fingerpickRepeats";
+import { repeatMarkupError } from "@/lib/fingerpickRepeats";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { clampBpmToMeter } from "@/lib/strumBars";
 import { beatUnitGlyph, meterLabel } from "@/lib/strumMeter";
@@ -161,8 +161,8 @@ export default function TabEditPage({ id, target }: { id: string; target?: Edito
 			setSettingsOpen(true);
 			return;
 		}
-		// Unclosed or dangling repeats would reach playback and the stave malformed.
-		const { error } = deriveRepeatDirectives(working.measures);
+		// An unclosed repeat or an ending no pass reaches would play and draw malformed.
+		const error = repeatMarkupError(working.measures);
 		if (error) {
 			toast.error(error);
 			return;

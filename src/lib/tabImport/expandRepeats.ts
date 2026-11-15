@@ -6,7 +6,7 @@ import type { RepeatDirective, ValidationIssue } from "./types";
 export const MAX_REPEAT_TIMES = 128;
 
 /** A copy with fresh ids, and the map from each old slot id to its copy's. */
-function cloneMeasureWithFreshIds(measure: Measure, idMap: Map<string, string>): Measure {
+export function cloneMeasureWithFreshIds(measure: Measure, idMap: Map<string, string>): Measure {
 	return {
 		...structuredClone(measure),
 		id: crypto.randomUUID(),
@@ -23,7 +23,7 @@ function cloneMeasureWithFreshIds(measure: Measure, idMap: Map<string, string>):
  * in the segment, anchored on the copy's slots. One that runs out of the
  * segment stays where it is (it covers notes the copy does not repeat).
  */
-function copiedSpans(spans: readonly Span[], members: ReadonlyMap<string, readonly string[]>, idMap: ReadonlyMap<string, string>): Span[] {
+export function copiedSpans(spans: readonly Span[], members: ReadonlyMap<string, readonly string[]>, idMap: ReadonlyMap<string, string>): Span[] {
 	const out: Span[] = [];
 	for (const span of spans) {
 		const slots = members.get(span.id) ?? [];

@@ -2,6 +2,7 @@ import type { BeatSlot, FingerpickPattern, NoteEffects } from "@/lib/fingerpickT
 import { DURATION_TICKS } from "@/lib/fingerpickEdit";
 import { indexPattern, spanCovers, type PatternIndex } from "@/lib/fingerpickIndex";
 import { chordAbbreviation } from "@/lib/strumProgressions";
+import { voltaMarks } from "@/lib/fingerpickRepeats";
 import { EFFECT_STACK_ORDER, SPAN_DEFS, techniqueDef } from "@/lib/techniqueRegistry";
 
 /**
@@ -93,8 +94,11 @@ function padSpace(text: string, width: number): string {
  * slot carries a chord mark, a hit line above when any slot is slapped or
  * tapped (the registry's letter over the column), and a `P.M.` / `let ring`
  * line below for the brackets, each run written as its label and dashes to
- * the run's end. Every string line has the same length, so the text keeps the
- * rhythm when read in a mono font.
+ * the run's end. Repeat barlines are `|:` and `:|`, and the first / second
+ * endings a line on top, each bracket its label and underscores over its bars,
+ * with a play count over a `:|` that plays more than twice (`x3`). Every
+ * string line has the same length, so the text keeps the rhythm when read in
+ * a mono font.
  */
 export function patternToAsciiTab(pattern: FingerpickPattern): string {
 	const unit = shortestTicks(pattern);
@@ -105,8 +109,22 @@ export function patternToAsciiTab(pattern: FingerpickPattern): string {
 	let hitLine = "  ";
 	let anyHit = false;
 	const brackets = BRACKET_KINDS.map((b) => ({ ...b, line: "  ", any: false, inRun: false }));
+	const voltas = voltaMarks(pattern.measures);
+	let repeatLine = "";
+	let anyRepeatMark = false;
+	// A repeat barline's colon widens the string lines; every other line takes a space.
+	const colon = () => {
+		lines.forEach((_, i) => {
+			lines[i] += ":";
+		});
+		chordLine += " ";
+		hitLine += " ";
+		for (const b of brackets) b.line += " ";
+	};
 
 	for (const measure of pattern.measures) {
+		if (measure.repeatStart) colon();
+		const barStart = lines[0].length;
 		for (const slot of measure.slots) {
 			const texts = slot.strings.map((s) => noteText(s, slot.isRest));
 			const chord = slot.chord ? chordAbbreviation(slot.chord) : "";
@@ -134,6 +152,18 @@ export function patternToAsciiTab(pattern: FingerpickPattern): string {
 				b.inRun = has;
 			}
 		}
+		if (measure.repeatEnd) colon();
+		const volta = voltas.get(measure.id);
+		if (volta) {
+			anyRepeatMark = true;
+			repeatLine = padSpace(repeatLine, barStart) + (volta.label ?? "");
+			repeatLine += "_".repeat(Math.max(0, lines[0].length - repeatLine.length));
+		}
+		const times = measure.repeatTimes ?? 2;
+		if (measure.repeatEnd && times > 2) {
+			anyRepeatMark = true;
+			repeatLine = padSpace(repeatLine, lines[0].length - 1) + `x${times}`;
+		}
 		lines.forEach((_, i) => {
 			lines[i] += "|";
 		});
@@ -145,7 +175,11 @@ export function patternToAsciiTab(pattern: FingerpickPattern): string {
 		}
 	}
 
-	const above = [...(anyChord ? [chordLine.trimEnd()] : []), ...(anyHit ? [hitLine.trimEnd()] : [])];
+	const above = [
+		...(anyRepeatMark ? [repeatLine.trimEnd()] : []),
+		...(anyChord ? [chordLine.trimEnd()] : []),
+		...(anyHit ? [hitLine.trimEnd()] : []),
+	];
 	const below = brackets.filter((b) => b.any).map((b) => b.line.trimEnd());
 	return [...above, ...lines, ...below].join("\n");
 }

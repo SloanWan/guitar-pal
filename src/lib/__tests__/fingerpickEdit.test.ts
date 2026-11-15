@@ -331,6 +331,13 @@ describe("cloneMeasure", () => {
 		expect(clone.slots.every((s, i) => s.id !== source.slots[i].id)).toBe(true);
 	});
 
+	it("leaves the bar's repeat barlines and ending behind, so the end of the tab plays", () => {
+		const p = twoMeasurePattern();
+		const measures = [{ ...p.measures[0], repeatEnd: true, repeatTimes: 3, ending: [1] }, p.measures[1]];
+		const clone = cloneMeasure(measures, 0)[2];
+		expect(Object.keys(clone).sort()).toEqual(["id", "slots"]);
+	});
+
 	it("uses the supplied newId for the appended clone", () => {
 		const p = twoMeasurePattern();
 		const out = cloneMeasure(p.measures, 0, "clone-id");

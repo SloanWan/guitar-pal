@@ -3,6 +3,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { BeatSlot, Duration, FingerpickPattern, Link, Measure, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
 import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
+import { MAX_ENDING, repeatMarkupError } from "@/lib/fingerpickRepeats";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { isSupportedMeter, meterLabel, SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
 import {
@@ -59,7 +60,13 @@ export const IMPORT_BAR_SCHEMA = z.object({
 	slots: z.array(IMPORT_SLOT_SCHEMA).min(1).max(MAX_SLOTS_PER_BAR),
 	repeatStart: z.boolean().optional().describe("A repeat barline |: opens this bar."),
 	repeatEnd: z.boolean().optional().describe("A repeat barline :| closes this bar."),
-	repeatTimes: z.number().int().min(2).max(8).optional().describe("Total times the repeated section ending here is played; 2 when unmarked."),
+	repeatTimes: z.number().int().min(2).max(8).optional().describe("Total times the repeated section ending here is played; 2 when unmarked. Leave it out under endings: their passes set it."),
+	ending: z
+		.array(z.number().int().min(1).max(MAX_ENDING))
+		.min(1)
+		.max(MAX_ENDING)
+		.optional()
+		.describe('The passes this bar is played on, from the first / second ending bracket over it: [1] under "1.", [2] under "2.", [1, 2] under "1.2.". Every bar under the bracket carries it; write the bars once, as printed, never the repeat written out.'),
 });
 
 /** The tool's input, as a raw shape for `registerTool`. */
@@ -210,6 +217,7 @@ export function toImportedTabDraft(
 			measure.repeatEnd = true;
 			if (bar.repeatTimes !== undefined) measure.repeatTimes = bar.repeatTimes;
 		}
+		if (bar.ending) measure.ending = bar.ending;
 		return measure;
 	});
 
@@ -246,14 +254,17 @@ export function importTab(input: ImportTabInput, index: readonly ChordIndexEntry
 	if (errors.length > 0) return { ok: false, errors };
 	const normalized = normalizeImportedPattern(draft);
 	if (!normalized.pattern) return { ok: false, errors: normalized.errors };
+	// Repeats that do not play are a misread barline or bracket, sent back like an overfull bar.
+	const repeats = repeatMarkupError(normalized.pattern.measures);
+	if (repeats) return { ok: false, errors: [issue("REPEATS_UNPLAYABLE", "bars", repeats)] };
 	return { ok: true, pattern: normalized.pattern, warnings: [...warnings, ...normalized.warnings] };
 }
 
 /**
  * A pattern back into the tool's bars, so `read_share` hands the model
  * something it can change and send through `import_tab` again without loss:
- * every link, effect, bracket and hit the pattern holds. Repeat barlines ride
- * along; a chord mark is written as its abbreviation.
+ * every link, effect, bracket and hit the pattern holds. Repeat barlines and
+ * endings ride along; a chord mark is written as its abbreviation.
  */
 export function patternToImportBars(pattern: FingerpickPattern): ImportBar[] {
 	const index = indexPattern(pattern);
@@ -283,6 +294,7 @@ export function patternToImportBars(pattern: FingerpickPattern): ImportBar[] {
 			bar.repeatEnd = true;
 			if (measure.repeatTimes !== undefined) bar.repeatTimes = measure.repeatTimes;
 		}
+		if (measure.ending) bar.ending = [...measure.ending];
 		return bar;
 	});
 }

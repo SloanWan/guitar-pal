@@ -37,6 +37,7 @@ import {
 import { isBrush, strokeDirection, type Stroke } from "@/lib/fingerpickTypes";
 import { slotPitchLabels, splitPitchLabel, type SlotPitchLabel } from "@/lib/fingerpickPitch";
 import { MONO_FAMILY } from "@/app/fonts/fonts";
+import { voltaMarks, type VoltaMark } from "@/lib/fingerpickRepeats";
 
 // Layout constants — not props because they are fixed design decisions, not data.
 // CLEF_WIDTH: the left offset that gives the "TAB" clef glyph room (~30 px needed).
@@ -133,6 +134,18 @@ const SLIDE_MARK_REACH = 12;
 const WHAMMY_LINE_BELOW = 10;
 const WHAMMY_LINE_DROP = 14;
 const WHAMMY_FONT_SIZE = 9;
+// First / second endings: a solid line over the whole row's chord line, its label
+// under it at the bracket's start, a hook down where it begins and where it ends.
+// The line sits at least VOLTA_RISE over the top line, and a band clear of the
+// chord symbols (and their shapes) when they reach higher.
+const VOLTA_RISE = 46;
+const VOLTA_BAND = 16;
+const VOLTA_TOP_PAD = 4;
+const VOLTA_HOOK = 10;
+const VOLTA_FONT_SIZE = 10;
+const VOLTA_LABEL_DROP = 11;
+const VOLTA_LABEL_INSET = 5;
+const VOLTA_INSET = 3;
 // Extra room for a repeat-begin (|:) / repeat-end (:|) barline's thick line + dots.
 const REPEAT_BARLINE_EXTRA_WIDTH = 14;
 // A roll arrow sits left of its note; a slot needs this much more so it never
@@ -692,6 +705,37 @@ function drawScrape(svgEl: SVGSVGElement, x: number, yTop: number, yBottom: numb
 	svgEl.appendChild(path);
 }
 
+/** One bar's stretch of an ending's bracket, from `x1` to `x2` along `y`. */
+function drawVolta(svgEl: SVGSVGElement, x1: number, x2: number, y: number, mark: VoltaMark): void {
+	const ns = "http://www.w3.org/2000/svg";
+	const g = document.createElementNS(ns, "g");
+	g.setAttribute("class", "vf-volta");
+	const begins = mark.label !== null;
+	let d = begins ? `M ${x1} ${y + VOLTA_HOOK} L ${x1} ${y}` : `M ${x1} ${y}`;
+	d += ` L ${x2} ${y}`;
+	if (!mark.continues) d += ` L ${x2} ${y + VOLTA_HOOK}`;
+	const line = document.createElementNS(ns, "path");
+	line.setAttribute("d", d);
+	line.setAttribute("fill", "none");
+	line.setAttribute("stroke", "var(--tab-ink, var(--gp-ink))");
+	line.setAttribute("stroke-width", "1");
+	g.appendChild(line);
+	if (mark.label !== null) {
+		const text = document.createElementNS(ns, "text");
+		text.setAttribute("x", String(x1 + VOLTA_LABEL_INSET));
+		text.setAttribute("y", String(y + VOLTA_LABEL_DROP));
+		// The SVG root carries VexFlow's black stroke; a label must not inherit it.
+		text.setAttribute("stroke", "none");
+		text.setAttribute("font-family", MONO_FAMILY);
+		text.setAttribute("font-size", `${VOLTA_FONT_SIZE}px`);
+		text.setAttribute("font-weight", "600");
+		text.setAttribute("fill", "var(--tab-ink, var(--gp-ink))");
+		text.textContent = mark.label;
+		g.appendChild(text);
+	}
+	svgEl.appendChild(g);
+}
+
 function bracketLabelRoom(label: string): number {
 	return label.length * BRACKET_CHAR_WIDTH + 3;
 }
@@ -810,7 +854,18 @@ function StaveRow({
 			const stackHeight = diagramHeight * lanes + CHORD_DIAGRAM_LANE_GAP * (lanes - 1);
 			const wanted =
 				stackHeight + CHORD_DIAGRAM_GAP + CHORD_SYMBOL_HEIGHT + CHORD_DIAGRAM_TOP_PAD;
-			const headroom = showDiagrams ? Math.max(0, wanted - freeAbove) : 0;
+			// An ending's bracket rides over everything above the stave: the chord
+			// symbols, and their shapes when they are shown.
+			const voltas = renderContext?.voltas ?? voltaMarks(measures);
+			const hasVolta = measures.some((m) => voltas.has(m.id));
+			const topLineY = new TabStave(0, 0, 100).getYForLine(0) + STAVE_Y;
+			const chordTopAbove = chordOffset + CHORD_SYMBOL_HEIGHT + (showDiagrams ? CHORD_DIAGRAM_GAP + stackHeight : 0);
+			const voltaAbove = Math.max(VOLTA_RISE, chordTopAbove + VOLTA_BAND);
+			const headroom = Math.max(
+				showDiagrams ? wanted - freeAbove : 0,
+				hasVolta ? voltaAbove + VOLTA_TOP_PAD - topLineY : 0,
+				0,
+			);
 			const staveY = STAVE_Y + headroom;
 			// Footroom for the pitch column: the tallest stack in the row sets how
 			// far past the stave's usual bottom the SVG has to reach.
@@ -1027,6 +1082,17 @@ function StaveRow({
 					open: continuesAfter === true,
 				})),
 			);
+			if (hasVolta) {
+				const voltaY = staves[0].getYForLine(0) - voltaAbove;
+				drawn.forEach(({ measure, stave }, i) => {
+					const mark = voltas.get(measure.id);
+					if (!mark) return;
+					// A row's first bar starts its bracket past the TAB clef.
+					const x1 = i === 0 ? stave.getNoteStartX() - 8 : stave.getX() + (mark.label !== null ? VOLTA_INSET : 0);
+					const x2 = stave.getX() + stave.getWidth() - (mark.continues ? 0 : VOLTA_INSET);
+					drawVolta(svgEl, x1, x2, voltaY, mark);
+				});
+			}
 			const bracketY = staves[0].getYForLine(0) - BRACKET_BASELINE_OFFSET;
 			const palmMuteY = staves[0].getYForLine(5) + PALM_MUTE_BASELINE;
 			const barlines = staves.slice(1).map((stave) => stave.getX());

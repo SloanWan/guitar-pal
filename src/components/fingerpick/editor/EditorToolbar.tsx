@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, Combine, Keyboard } from "lucide-react";
-import type { Duration, FingerpickPattern } from "@/lib/fingerpickTypes";
+import type { Duration, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import {
 	canShiftMeasureStrings,
 	cloneMeasureInPattern,
@@ -18,7 +18,7 @@ import {
 	type SlotTarget,
 } from "@/lib/fingerpickEdit";
 import { techniqueBlock } from "@/lib/fingerpickTechniqueEdit";
-import { DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
+import { DEFAULT_REPEAT_TIMES, ENDING_CHOICES, impliedRepeatTimes, toggleEnding } from "@/lib/fingerpickRepeats";
 import { BLOCK_REASON, applyNoteEdit, type NoteEdit } from "@/lib/tabEditorCursor";
 import { applyDot, applyDuration, applyRunMerge, barFill, dotChoice, durationChoices, runMergeChoice, tripletChoice } from "@/lib/tabEditorTools";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,15 @@ const QUICK: readonly { label: string; name: string; edit: NoteEdit; kind?: stri
 
 const REPEAT_TIMES_MAX = 16;
 
+/** A bar with its :| taken off, and the play count that went with it. */
+function withoutRepeatEnd(measure: Measure): Measure {
+	if (!measure.repeatEnd) return { ...measure, repeatEnd: true };
+	const next = { ...measure };
+	delete next.repeatEnd;
+	delete next.repeatTimes;
+	return next;
+}
+
 /**
  * The editor's toolbar (#361), over the tab: the cursor's note value (split or
  * merged, so the bar still adds up), triplet and rest; the quick marks; the
@@ -86,6 +95,9 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 	const fill = measure ? barFill(measure, working.timeSignature) : null;
 	const bars = working.measures.length;
 	const m = cursor.measureIndex;
+	// Under endings the play count is theirs: shown, not set.
+	const implied = impliedRepeatTimes(working.measures, m);
+	const times = implied ?? measure?.repeatTimes ?? DEFAULT_REPEAT_TIMES;
 
 	function setValue(duration: Duration, kind: "split" | "merge" | "grow") {
 		const edit = applyDuration(working, cursor, duration, kind);
@@ -321,7 +333,7 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 							type="button"
 							className="te-chip"
 							aria-pressed={measure?.repeatEnd === true}
-							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? { ...x, repeatEnd: !x.repeatEnd } : x))))}
+							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? withoutRepeatEnd(x) : x))))}
 						>
 							:| End
 						</button>
@@ -330,21 +342,40 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 							type="button"
 							className="pb-icon"
 							aria-label="Fewer times"
-							disabled={!measure?.repeatEnd || (measure.repeatTimes ?? DEFAULT_REPEAT_TIMES) <= DEFAULT_REPEAT_TIMES}
-							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? { ...x, repeatTimes: (x.repeatTimes ?? DEFAULT_REPEAT_TIMES) - 1 } : x))))}
+							title={implied !== null ? "Set by the endings" : undefined}
+							disabled={!measure?.repeatEnd || implied !== null || times <= DEFAULT_REPEAT_TIMES}
+							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? { ...x, repeatTimes: times - 1 } : x))))}
 						>
 							−
 						</button>
-						<output className="pb-num te-times">×{measure?.repeatTimes ?? DEFAULT_REPEAT_TIMES}</output>
+						<output className="pb-num te-times">×{times}</output>
 						<button
 							type="button"
 							className="pb-icon"
 							aria-label="More times"
-							disabled={!measure?.repeatEnd || (measure.repeatTimes ?? DEFAULT_REPEAT_TIMES) >= REPEAT_TIMES_MAX}
-							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? { ...x, repeatTimes: (x.repeatTimes ?? DEFAULT_REPEAT_TIMES) + 1 } : x))))}
+							title={implied !== null ? "Set by the endings" : undefined}
+							disabled={!measure?.repeatEnd || implied !== null || times >= REPEAT_TIMES_MAX}
+							onClick={() => commit((p) => withMeasures(p, p.measures.map((x, i) => (i === m ? { ...x, repeatTimes: times + 1 } : x))))}
 						>
 							+
 						</button>
+					</div>
+					<div className="te-menu-row" role="group" aria-label="Ending">
+						<span className="te-menu-lab">Ending</span>
+						{ENDING_CHOICES.map((pass) => (
+							<button
+								key={pass}
+								type="button"
+								className="te-chip te-mono"
+								aria-pressed={measure?.ending?.includes(pass) === true}
+								aria-label={`Ending ${pass}`}
+								title={`Play this bar on pass ${pass} of its repeat`}
+								disabled={!measure}
+								onClick={() => commit((p) => withMeasures(p, toggleEnding(p.measures, m, pass)))}
+							>
+								{pass}.
+							</button>
+						))}
 					</div>
 					<span className="te-menu-sep" role="separator" />
 					<button

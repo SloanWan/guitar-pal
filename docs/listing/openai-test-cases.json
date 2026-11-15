@@ -13,10 +13,10 @@
 			"expected_behavior": "Calls propose_tab with a few bars in 4/4 on an 8-slot grid: an alternating thumb on strings 4–6 and melody notes on strings 1–3 over C-family chords. Replies with the /p/<id> link; the page plays the exercise and shows it as tab."
 		},
 		{
-			"description": "A tab image brought into the player. The attached image is an original exercise rendered by Guitar Pal.",
+			"description": "A tab image brought into the player. The attached image is Greensleeves (traditional, public domain), notation over tab, 18 bars in 6/8 with two repeats and first / second endings.",
 			"prompt": "Bring this tab into Guitar Pal so I can play it back.",
 			"tools_triggered": "import_tab",
-			"expected_behavior": "Reads the attached tab and calls import_tab with its bars, copying every fret and the printed note values. Replies with the /p/<id> link; any places it was unsure of are listed under the title on the page.",
+			"expected_behavior": "Reads the attached tab and calls import_tab with its 18 bars, copying every fret, the printed note values, the repeat barlines and the first / second endings. Replies with the /p/<id> link; the tool's summary says the bars play 1–9, 2–8, 10–18, 11–18, and any places it was unsure of are listed under the title on the page.",
 			"file_attachment_urls": [
 				"https://guitarpal.sloanwan.com/listing/sample-tab.png"
 			]

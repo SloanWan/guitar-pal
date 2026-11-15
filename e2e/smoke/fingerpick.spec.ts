@@ -14,6 +14,34 @@ test("fingerpick renders a tab stave and plays", { tag: "@phone" }, async ({ pag
 	await playAndStop(page, "Pause");
 });
 
+/** First and second endings (#523): a bracket over each, the first closed on its :|, the second left open. */
+test("a tab with first and second endings draws their brackets", async ({ page }) => {
+	const bar = (id: string, extra: Record<string, unknown> = {}) => ({
+		id,
+		slots: [0, 1, 2, 3].map((n) => ({
+			id: `${id}-${n}`,
+			duration: "quarter",
+			strings: Array.from({ length: 6 }, (_, s) => ({ fret: s === 0 ? n : null, muted: false })),
+		})),
+		...extra,
+	});
+	const tab = {
+		id: "custom-endings",
+		name: "Endings",
+		schemaVersion: 2,
+		bpm: 90,
+		timeSignature: [4, 4],
+		measures: [bar("a", { repeatStart: true }), bar("b", { ending: [1], repeatEnd: true }), bar("c", { ending: [2] })],
+	};
+	await page.addInitScript((t) => localStorage.setItem("customFingerpickPatterns", JSON.stringify([t])), tab);
+	await page.goto(`/tab?pattern=${tab.id}`);
+
+	const voltas = page.locator("svg .vf-volta");
+	await expect(voltas).toHaveCount(2);
+	await expect(voltas.nth(0)).toContainText("1.");
+	await expect(voltas.nth(1)).toContainText("2.");
+});
+
 /**
  * The editor is a page of its own (#358). Signed out, a saved tab goes to the
  * browser, so nothing here is written anywhere but this test's storage.
@@ -31,6 +59,40 @@ test("New opens the editor; a named tab saves and the reader opens on it", async
 
 	await expect(page).toHaveURL(/\/tab\?pattern=/);
 	await expect(page.getByRole("heading", { name: "Smoke tab" })).toBeVisible();
+});
+
+/** Endings written in the editor (#526): a pass no repeat plays is said on its bar; the reader draws the brackets. */
+test("endings marked in the editor save, and the reader draws their brackets", async ({ page }) => {
+	await page.goto("/tab/edit/new");
+	await expect(page.getByRole("button", { name: "Bar 1, slot 1, B string: empty" })).toBeVisible();
+	await page.getByRole("button", { name: "Add bar", exact: true }).click();
+	await page.getByRole("button", { name: "Add bar", exact: true }).click();
+
+	await page.getByRole("button", { name: "Repeat start at bar 1" }).click();
+	await page.getByRole("group", { name: "Ending at bar 2" }).getByRole("button", { name: "Ending 1" }).click();
+	await page.getByRole("button", { name: "Repeat end at bar 2" }).click();
+	const third = page.getByRole("group", { name: "Ending at bar 3" });
+	await third.getByRole("button", { name: "Ending 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "Bar 3: ending 3. should be 2." })).toBeVisible();
+	await third.getByRole("button", { name: "Ending 3" }).click();
+	await third.getByRole("button", { name: "Ending 2" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "should be" })).toHaveCount(0);
+	// A :| on the last ending is one too many.
+	await page.getByRole("button", { name: "Repeat end at bar 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "if this is the last ending, take its :| off" })).toBeVisible();
+	await page.getByRole("button", { name: "Repeat end at bar 3" }).click();
+	await expect(page.getByRole("status").filter({ hasText: "take its :| off" })).toHaveCount(0);
+
+	await page.getByRole("button", { name: "Tab settings" }).click();
+	await page.getByRole("textbox", { name: "Name" }).fill("Endings tab");
+	await page.keyboard.press("Escape");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+
+	await expect(page).toHaveURL(/\/tab\?pattern=/);
+	const voltas = page.locator("svg .vf-volta");
+	await expect(voltas).toHaveCount(2);
+	await expect(voltas.nth(0)).toContainText("1.");
+	await expect(voltas.nth(1)).toContainText("2.");
 });
 
 test("the progress bar runs, in the tab colour, while the editor loads", async ({ page }) => {

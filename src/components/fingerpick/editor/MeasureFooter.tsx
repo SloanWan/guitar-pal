@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Duration, FingerpickPattern, Measure } from "@/lib/fingerpickTypes";
 import { remapMeasure, resetMeasure, withMeasures } from "@/lib/fingerpickEdit";
-import { DEFAULT_REPEAT_TIMES } from "@/lib/fingerpickRepeats";
+import { DEFAULT_REPEAT_TIMES, ENDING_CHOICES, impliedRepeatTimes, playOrder, toggleEnding } from "@/lib/fingerpickRepeats";
 import { isCompound } from "@/lib/strumMeter";
 import { Button } from "@/components/ui/button";
 import type { CommitPattern } from "@/components/fingerpick/useEditHistory";
@@ -35,9 +35,10 @@ export interface MeasureFooterProps {
 	tools: Pick<ChordTools, "chordsInEffect" | "voicingsFor">;
 }
 
-// The rows under a bar's grid: fill it with one note value, the repeat barlines
-// and their play count, and the pick sequence — plus the ask a fill raises over
-// notes. Each block owns its asks; the block is keyed by measure id, so a moved
+// The rows under a bar's grid: fill it with one note value; the repeat barlines,
+// their play count and the bar's ending (the passes it plays on); the pick
+// sequence — plus the ask a fill raises over notes, and what is wrong with the
+// repeats when it is this bar. Each block owns its asks; the block is keyed by measure id, so a moved
 // bar keeps them.
 export default function MeasureFooter({ measure, measureIndex, working, commit, tools }: MeasureFooterProps) {
 	// The note value waiting on "keep (remap) or clear?" because the bar holds notes.
@@ -80,7 +81,10 @@ export default function MeasureFooter({ measure, measureIndex, working, commit, 
 		setFillAsk(null);
 	}
 
-	const times = measure.repeatTimes ?? DEFAULT_REPEAT_TIMES;
+	// Under endings the play count is theirs: shown, not set.
+	const implied = impliedRepeatTimes(working.measures, measureIndex);
+	const times = implied ?? measure.repeatTimes ?? DEFAULT_REPEAT_TIMES;
+	const { error, errorBar } = useMemo(() => playOrder(working.measures), [working.measures]);
 	return (
 		<div className="te-mb-foot">
 			<div className="te-mb-row">
@@ -98,7 +102,8 @@ export default function MeasureFooter({ measure, measureIndex, working, commit, 
 						{d === "eighth-triplet" && <sup>3</sup>}
 					</button>
 				))}
-				<span className="tb-grow" />
+			</div>
+			<div className="te-mb-row te-mb-repeats">
 				<button
 					type="button"
 					className="te-mb-fill te-mono"
@@ -124,28 +129,49 @@ export default function MeasureFooter({ measure, measureIndex, working, commit, 
 					<button
 						type="button"
 						className="te-mb-ic"
-						disabled={!measure.repeatEnd || times <= DEFAULT_REPEAT_TIMES}
+						disabled={!measure.repeatEnd || implied !== null || times <= DEFAULT_REPEAT_TIMES}
 						onClick={() => setRepeat({ repeatTimes: Math.max(DEFAULT_REPEAT_TIMES, times - 1) })}
 						aria-label="Play fewer times"
-						title="Play fewer times"
+						title={implied !== null ? "Set by the endings" : "Play fewer times"}
 					>
 						−
 					</button>
-					<span className="pb-num" aria-label={`Played ${times} times`}>
+					<span className="pb-num" aria-label={`Played ${times} times`} title={implied !== null ? "Set by the endings" : undefined}>
 						×{times}
 					</span>
 					<button
 						type="button"
 						className="te-mb-ic"
-						disabled={!measure.repeatEnd || times >= REPEAT_TIMES_MAX}
+						disabled={!measure.repeatEnd || implied !== null || times >= REPEAT_TIMES_MAX}
 						onClick={() => setRepeat({ repeatTimes: Math.min(REPEAT_TIMES_MAX, times + 1) })}
 						aria-label="Play more times"
-						title="Play more times"
+						title={implied !== null ? "Set by the endings" : "Play more times"}
 					>
 						+
 					</button>
 				</span>
+				<span aria-hidden className="te-mb-div" />
+				<span className="te-mb-endings" role="group" aria-label={`Ending at bar ${measureIndex + 1}`}>
+					{ENDING_CHOICES.map((pass) => (
+						<button
+							key={pass}
+							type="button"
+							className="te-mb-fill te-mono"
+							onClick={() => commit((prev) => withMeasures(prev, toggleEnding(prev.measures, measureIndex, pass)))}
+							aria-pressed={measure.ending?.includes(pass) === true}
+							aria-label={`Ending ${pass}`}
+							title={`Ending ${pass}. — play this bar on pass ${pass} of its repeat`}
+						>
+							{pass}.
+						</button>
+					))}
+				</span>
 			</div>
+			{errorBar === measureIndex && (
+				<p className="te-mb-warn" role="status">
+					{error}
+				</p>
+			)}
 			{fillAsk && (
 				<div className="te-ask" role="alertdialog" aria-label="Fill the bar">
 					<span>Bar {measureIndex + 1} has notes. Keep them (remap onto the new values) or clear the bar?</span>

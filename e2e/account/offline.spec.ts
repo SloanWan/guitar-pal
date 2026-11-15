@@ -26,9 +26,15 @@ test.describe("offline library", () => {
 			const dialog = page.getByRole("dialog", { name: "New pattern" });
 			await dialog.getByRole("textbox", { name: "Strokes" }).fill("D D DU D");
 			await dialog.getByRole("textbox", { name: "Pattern name" }).fill(name);
+			// The pattern opens before its write has reached the account, and a reload
+			// in between cancels the write: the reload below waits for its answer.
+			const written = page.waitForResponse(
+				(r) => r.url().includes("/rest/v1/user_strum_patterns") && r.request().method() === "POST",
+				{ timeout: 20_000 },
+			);
 			await dialog.getByRole("button", { name: "Create", exact: true }).click();
-			// The save is written to the account and read back before the pattern opens.
 			await expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible({ timeout: 20_000 });
+			expect((await written).ok()).toBe(true);
 
 			// Online once more: the page is kept by the worker, the library by its copy.
 			// On a slow link the sign-in check and the read can each take seconds.

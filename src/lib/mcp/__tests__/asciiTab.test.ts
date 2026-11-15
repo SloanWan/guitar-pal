@@ -166,4 +166,26 @@ describe("patternToAsciiTab", () => {
 			expect(new Set(staff.map((l) => l.length)).size, preset.name).toBe(1);
 		}
 	});
+
+	it("writes repeat barlines and a line of endings over the bars", () => {
+		const base = pattern([
+			[slot("quarter", { 0: { fret: 0 } }), slot("quarter", { 0: { fret: 1 } }), slot("half", { 0: { fret: 3 } })],
+			[slot("whole", { 0: { fret: 0 } })],
+			[slot("whole", { 0: { fret: 2 } })],
+			[slot("whole", { 0: { fret: 0 } })],
+		]);
+		const text = patternToAsciiTab({
+			...base,
+			measures: [
+				{ ...base.measures[0], repeatStart: true },
+				{ ...base.measures[1], ending: [1], repeatEnd: true },
+				{ ...base.measures[2], ending: [2] },
+				{ ...base.measures[3], repeatStart: true, repeatEnd: true, repeatTimes: 3 },
+			],
+		});
+		const [endings, high, ...rest] = text.split("\n");
+		expect(endings).toBe("            1._______ 2.______          x3");
+		expect(high).toBe("e|:0-1-3---|0-------:|2-------|:0-------:|");
+		expect(rest.every((l) => l.length === high.length)).toBe(true);
+	});
 });

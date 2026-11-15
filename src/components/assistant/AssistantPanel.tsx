@@ -818,6 +818,19 @@ export default function AssistantPanel({
 							if (nudge && e.target.value !== "") dismissNudge();
 							setDraft(e.target.value);
 						}}
+						onFocus={(e) => {
+							// iOS pans the whole page up to a field the keyboard is about to
+							// cover — but not to one that is invisible as it takes focus. Hidden
+							// for that instant, the page stays put and the panel fits itself
+							// above the keyboard instead (#528). Where the pan comes anyway,
+							// the launcher undoes it.
+							if (!hasCoarsePointer()) return;
+							const field = e.currentTarget;
+							field.style.opacity = "0";
+							setTimeout(() => {
+								field.style.opacity = "";
+							});
+						}}
 						onKeyDown={(e) => {
 							if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !e.altKey && !e.metaKey) {
 								if (recall(e.key === "ArrowUp" ? -1 : 1)) e.preventDefault();

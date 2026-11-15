@@ -5,6 +5,7 @@ import { INDEX } from "@/lib/assistant/tab/__tests__/fixtures";
 import { PRESET_FINGERPICK_PATTERNS } from "@/lib/fingerpickPatterns";
 import {
 	createGuitarPalServer,
+	describeFingerpick,
 	describeStrum,
 	shareIdFromLink,
 	ShareRefused,
@@ -84,6 +85,20 @@ describe("shareIdFromLink", () => {
 		expect(shareIdFromLink(" aB3xK9mQ2z ")).toBe("aB3xK9mQ2z");
 		expect(shareIdFromLink("https://guitarpal.test/p/short")).toBeNull();
 		expect(shareIdFromLink("https://guitarpal.test/strum")).toBeNull();
+	});
+});
+
+describe("describeFingerpick", () => {
+	const tab = PRESET_FINGERPICK_PATTERNS[0];
+	const flags: Partial<(typeof tab.measures)[number]>[] = [{ repeatStart: true }, { ending: [1], repeatEnd: true }, { ending: [2] }];
+
+	it("says the order the bars play in when the repeats change it", () => {
+		const measures = tab.measures.slice(0, 4).map((m, i) => ({ ...m, ...flags[i] }));
+		expect(describeFingerpick({ ...tab, measures })).toContain("Plays bars 1–2, 1, 3–4");
+	});
+
+	it("says nothing about the order when the bars play as written", () => {
+		expect(describeFingerpick({ ...tab, measures: tab.measures.slice(0, 4) })).not.toContain("Plays bars");
 	});
 });
 

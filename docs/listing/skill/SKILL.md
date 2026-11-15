@@ -25,7 +25,9 @@ lyrics — are answered in words, without a tool.
 ## How the tools answer
 
 - An error result names what is not playable; a corrected call is accepted.
-- `import_tab` copies what is printed: every fret and every written note value.
+- `import_tab` copies what is printed: every fret and every written note value,
+  and the repeat barlines and first / second endings on the bars that carry
+  them, never a repeat written out.
   Places that could not be read with confidence go in `uncertain`, and the page
   lists them for the player to check.
 - Every successful call writes a new public snapshot that anyone with the link

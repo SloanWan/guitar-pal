@@ -12,6 +12,7 @@ import { beatUnitGlyph } from "@/lib/strumMeter";
 import { stashHandoff } from "@/lib/assistant/handoff";
 import type { TabProposal } from "@/lib/assistant/tab/types";
 import { indexPattern } from "@/lib/fingerpickIndex";
+import { voltaMarks } from "@/lib/fingerpickRepeats";
 import { useNavRouter } from "@/components/nav-progress";
 
 /**
@@ -32,7 +33,7 @@ export default function TabProposalPreview({ proposal }: { proposal: TabProposal
 	const pathname = usePathname();
 	const { pattern } = proposal;
 	const [shown, setShown] = useState(0);
-	const renderContext = useMemo(() => ({ index: indexPattern(pattern) }), [pattern]);
+	const renderContext = useMemo(() => ({ index: indexPattern(pattern), voltas: voltaMarks(pattern.measures) }), [pattern]);
 	const more = pattern.measures.length - shown;
 	const audition = useTabAudition(pattern);
 

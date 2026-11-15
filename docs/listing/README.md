@@ -35,7 +35,7 @@ No account, API key or sign-in is needed.
 1. Add the server URL as a custom connector / MCP server with no authentication.
 2. **propose_strum**: "Make me a Guitar Pal strumming pattern for C G Am F at 90 bpm." Expect a `/p/<id>` link; it opens a player with four bars at 90 bpm.
 3. **propose_tab**: "Use Guitar Pal to write a slow 6/8 fingerpicking pattern over Am–F–C–G." Expect a link to a playable tab in 6/8.
-4. **import_tab**: attach `https://guitarpal.sloanwan.com/listing/sample-tab.png` and say "Bring this tab into Guitar Pal." Expect a link to the same tab, playable.
+4. **import_tab**: attach `https://guitarpal.sloanwan.com/listing/sample-tab.png` (Greensleeves, public domain, 18 bars with repeats and first / second endings; drawn by `docs/listing/sample-tab/render.mjs`) and say "Bring this tab into Guitar Pal." Expect a link to the same tab, playable, the summary reading "Plays bars 1–9, 2–8, 10–18, 11–18".
 5. **read_share**: paste a link from step 2 and say "Make this busier with more up-strums." Expect read_share, then a new link; the old one is unchanged.
 
 Every link is a public snapshot that expires after 30 days. Over a rate limit a tool answers with a message instead of a link.

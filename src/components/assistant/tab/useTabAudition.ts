@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { claimAudition } from "@/lib/assistant/audition";
+import { expandFingerpickPattern } from "@/lib/fingerpickRepeats";
 import { useFingerpickAudioEngine } from "@/components/fingerpick/useFingerpickAudioEngine";
 
 /**
  * A card's tab, played once on the fingerpick page's engine. The samples load
  * on the first press, not when the card appears, so a thread of cards opens
- * no audio until one is heard. Hearing one card silences any other.
+ * no audio until one is heard. Hearing one card silences any other. Repeats
+ * and endings play out (the card draws no cursor, so the timeline needs no map back).
  */
-export function useTabAudition(pattern: FingerpickPattern) {
+export function useTabAudition(tab: FingerpickPattern) {
+	const pattern = useMemo(() => expandFingerpickPattern(tab).pattern, [tab]);
 	const { isLoaded, loadFailed, isPlaying, load, play, stop } = useFingerpickAudioEngine();
 	const [asked, setAsked] = useState(false);
 	const pendingRef = useRef(false);

@@ -15,6 +15,12 @@ describe("readInput", () => {
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: true });
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: "0", slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: "e|--", bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
+		// Repeats, endings and a pickup are read through; a malformed one is refused.
+		expect(
+			readInput("propose_tab", { name: "x", slotsPerBar: 8, pickupSlots: 2, bars: [{ notes: [], repeatStart: true, repeatEnd: true, repeatTimes: 3, ending: [1] }], bpm: 0, timeSignature: "" }),
+		).toMatchObject({ ok: true, input: { pickupSlots: 2, bars: [{ repeatStart: true, repeatEnd: true, repeatTimes: 3, ending: [1] }] } });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [], ending: ["1"] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, pickupSlots: "2", bars: [{ notes: [] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", "nope")).toMatchObject({ ok: false });
 		expect(readInput("show_chord", { chords: ["F#m7"] })).toMatchObject({ ok: true });
 		expect(readInput("show_chord", { chords: [] })).toMatchObject({ ok: false });

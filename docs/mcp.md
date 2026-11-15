@@ -89,7 +89,7 @@ player: play, loop, change the tempo. **Import** copies it into your library
 ## For developers
 
 Tools: `propose_strum` (rhythm notation + chords), `propose_tab` (notes on a slot
-grid), `import_tab` (bars with written note values, repeat barlines and first /
+grid, with repeat barlines, first / second endings and a pickup), `import_tab` (bars with written note values, repeat barlines and first /
 second endings, for a tab read off an image), `read_share` (a link back as
 text). Everything passes the app's own
 validators before a link is made; the model writes notation, never audio or raw

@@ -1,7 +1,7 @@
 import type { Link, NoteEffects, Percussion } from "@/lib/fingerpickTypes";
 import { MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import { plainDurationForTicks } from "@/lib/fingerpickPickSequence";
-import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, type ImportedTabDraft } from "@/lib/tabImport";
+import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, type ImportedTabDraft, type RepeatBarInput } from "@/lib/tabImport";
 import { LINK_KINDS, PERCUSSION_KINDS, isLinkKind, isPercussionKind } from "@/lib/techniqueRegistry";
 import { barSlots, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
@@ -41,7 +41,7 @@ export interface ProposedHit {
 	kind: string;
 }
 
-export interface ProposedBar {
+export interface ProposedBar extends RepeatBarInput {
 	notes: ProposedNote[];
 	hits?: ProposedHit[];
 }
@@ -50,6 +50,12 @@ export interface BuildTabDraftInput {
 	slotsPerBar: number;
 	bars: readonly ProposedBar[];
 	timeSignature: [number, number];
+	/**
+	 * Bar 1 is a pickup holding only the last this-many slots of a bar, its
+	 * notes' slots counted from 0 within them; it plays straight into bar 2
+	 * (`pickupLead`). Absent, every bar is full.
+	 */
+	pickupSlots?: number;
 }
 
 export type BuildTabDraftResult =
@@ -108,17 +114,28 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 		};
 	}
 
+	const { pickupSlots } = input;
+	if (pickupSlots !== undefined) {
+		if (!Number.isInteger(pickupSlots) || pickupSlots < 1 || pickupSlots >= slotsPerBar) {
+			return { ok: false, error: `pickupSlots ${pickupSlots} is not a pickup: it is 1 to ${slotsPerBar - 1}, the slots of a bar the pickup holds. Leave it out when bar 1 is full.` };
+		}
+		if (bars.length < 2) return { ok: false, error: "A pickup leads into a bar after it; with one bar, leave pickupSlots out." };
+	}
+
 	const capacity = measureCapacity(timeSignature);
-	const measures: { slots: ReturnType<typeof barSlots>["slots"] }[] = [];
+	const measures: ({ slots: ReturnType<typeof barSlots>["slots"] } & RepeatBarInput)[] = [];
 
 	for (const [index, bar] of bars.entries()) {
 		const where = `Bar ${index + 1}`;
+		// A pickup is the end of a bar: fewer slots, the same size each.
+		const positions = index === 0 && pickupSlots !== undefined ? pickupSlots : slotsPerBar;
+		const barCapacity = (capacity / slotsPerBar) * positions;
 		const byPosition = new Map<number, GridNote[]>();
 		const taken = new Set<string>();
 
 		for (const note of bar.notes) {
-			if (!Number.isInteger(note.slot) || note.slot < 0 || note.slot >= slotsPerBar) {
-				return { ok: false, error: `${where} has a note on slot ${note.slot}; with ${slotsPerBar} slots a bar the last one is ${slotsPerBar - 1}.` };
+			if (!Number.isInteger(note.slot) || note.slot < 0 || note.slot >= positions) {
+				return { ok: false, error: `${where} has a note on slot ${note.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
 			}
 			if (!Number.isInteger(note.string) || note.string < 1 || note.string > 6) {
 				return { ok: false, error: `${where} has a note on string ${note.string}; strings are 1 (high e) to 6 (low E).` };
@@ -153,8 +170,8 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 
 		const hits = new Map<number, Percussion>();
 		for (const hit of bar.hits ?? []) {
-			if (!Number.isInteger(hit.slot) || hit.slot < 0 || hit.slot >= slotsPerBar) {
-				return { ok: false, error: `${where} has a hit on slot ${hit.slot}; with ${slotsPerBar} slots a bar the last one is ${slotsPerBar - 1}.` };
+			if (!Number.isInteger(hit.slot) || hit.slot < 0 || hit.slot >= positions) {
+				return { ok: false, error: `${where} has a hit on slot ${hit.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
 			}
 			if (!isPercussionKind(hit.kind)) {
 				return { ok: false, error: `"${hit.kind}" is not a hit this app knows. Use ${PERCUSSION_KINDS.join(", ")}.` };
@@ -162,8 +179,15 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 			hits.set(hit.slot, { kind: hit.kind });
 		}
 
-		// A bar is exactly its slots, so `barSlots` cannot overflow here.
-		measures.push({ slots: barSlots(byPosition, slotsPerBar, capacity, hits).slots });
+		// A bar is exactly its slots, so `barSlots` cannot overflow here. Its
+		// barlines and ending ride along for the validator and `playOrder`.
+		measures.push({
+			slots: barSlots(byPosition, positions, barCapacity, hits).slots,
+			...(bar.repeatStart ? { repeatStart: true } : {}),
+			...(bar.repeatEnd ? { repeatEnd: true } : {}),
+			...(bar.repeatEnd && bar.repeatTimes !== undefined ? { repeatTimes: bar.repeatTimes } : {}),
+			...(bar.ending ? { ending: bar.ending } : {}),
+		});
 	}
 
 	return { ok: true, draft: { timeSignature, measures } };

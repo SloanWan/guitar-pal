@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import * as z from "zod";
-import { NOTE_MARKS_SHAPE, PERCUSSION_INPUT, jsonSchemaOf } from "@/lib/tabImport";
+import { NOTE_MARKS_SHAPE, PERCUSSION_INPUT, REPEAT_BAR_SHAPE, jsonSchemaOf } from "@/lib/tabImport";
 
 /**
  * The tools the General assistant can reach — the only way it produces a
@@ -41,6 +41,13 @@ const PROPOSED_NOTE_SCHEMA = jsonSchemaOf(
 		...NOTE_MARKS_SHAPE,
 	}),
 );
+
+/** A bar's |: :| and ending, the JSON schema of the fields `import_tab` takes too. */
+const REPEAT_BAR_PROPERTIES = (jsonSchemaOf(z.object(REPEAT_BAR_SHAPE)) as { properties: Record<string, unknown> }).properties;
+
+/** What `pickupSlots` means, for both `propose_tab`s. */
+export const PICKUP_SLOTS_DESCRIPTION =
+	"Only when the music opens on a pickup (an upbeat before the first full bar): how many slots of a bar it holds, the last ones. Bar 1 is then that short, its notes' slots counted from 0 within it, and it leads straight into bar 2. Leave it out when bar 1 is full; never write a pickup as a full bar that starts with silence.";
 
 const PROPOSED_HIT_SCHEMA = jsonSchemaOf(
 	z.object({
@@ -96,11 +103,18 @@ export interface ProposeTabInput {
 			letRing?: boolean;
 		}[];
 		hits?: { slot: number; kind: string }[];
+		repeatStart?: boolean;
+		repeatEnd?: boolean;
+		repeatTimes?: number;
+		/** The passes the bar is played on, under a first / second ending. */
+		ending?: number[];
 	}[];
 	/** 0 when no tempo was asked for. */
 	bpm: number;
 	/** e.g. "4/4", "3/4", "6/8"; empty for 4/4. */
 	timeSignature: string;
+	/** Bar 1 is a pickup of this many slots; absent when it is full. */
+	pickupSlots?: number;
 }
 
 const READ_SCHEMA: Anthropic.Tool.InputSchema = {
@@ -172,7 +186,7 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 	{
 		name: "propose_tab",
 		description:
-			"Compose a fingerpicking pattern or an exercise yourself, when the player described what they want rather than writing it out. Notes are placed on a grid of even slots, so the rhythm is exact and any fret can be written. The app validates it; it returns errors to fix if a note falls outside its bar.",
+			"Compose a fingerpicking pattern or an exercise yourself, when the player described what they want rather than writing it out. Notes are placed on a grid of even slots, so the rhythm is exact and any fret can be written. A section played twice is written once with its repeat barlines (and first / second endings when the passes differ), not written out; a pickup is pickupSlots. The app validates it; it returns errors to fix if a note falls outside its bar or the repeats do not play.",
 		strict: true,
 		input_schema: {
 			type: "object",
@@ -199,6 +213,7 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 								description: "Right-hand hits on slots of this bar, when the music has them: a slap of the strings, a thumb slap, a tap on the body.",
 								items: PROPOSED_HIT_SCHEMA,
 							},
+							...REPEAT_BAR_PROPERTIES,
 						},
 						required: ["notes"],
 						additionalProperties: false,
@@ -206,6 +221,7 @@ export const TOOLS: readonly Anthropic.Tool[] = [
 				},
 				bpm: { type: "integer", description: "0 when the player gave no tempo." },
 				timeSignature: { type: "string", description: "\"4/4\", \"3/4\" or \"6/8\". Empty for 4/4." },
+				pickupSlots: { type: "integer", description: PICKUP_SLOTS_DESCRIPTION },
 			},
 			required: ["name", "slotsPerBar", "bars", "bpm", "timeSignature"],
 			additionalProperties: false,

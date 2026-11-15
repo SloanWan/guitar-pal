@@ -221,6 +221,40 @@ describe("the server over a client", () => {
 		expect(saved.pattern.measures[0].slots.every((s) => s.duration === "quarter")).toBe(true);
 	});
 
+	it("propose_tab: a pickup and first / second endings are saved, and the order the bars play in is said", async () => {
+		const client = await open(deps);
+		const bar = (fret: number) => ({ notes: [0, 2, 4, 6, 8, 10].map((slot) => ({ string: 3, fret, slot })) });
+		const r = await call(client, "propose_tab", {
+			name: "Endings",
+			slotsPerBar: 12,
+			pickupSlots: 2,
+			bars: [{ notes: [{ string: 3, fret: 2, slot: 0 }] }, { ...bar(0), repeatStart: true }, { ...bar(2), ending: [1], repeatEnd: true }, { ...bar(2), ending: [2] }],
+			bpm: 50,
+			timeSignature: "6/8",
+		});
+		expect(r.isError).toBeUndefined();
+		expect(textOf(r)).toContain("Plays bars 1–3, 2, 4");
+		const saved = rows.get("share00001");
+		if (saved?.kind !== "fingerpick") throw new Error("not saved");
+		expect(saved.pattern.measures.map((m) => m.ending)).toEqual([undefined, undefined, [1], [2]]);
+		expect(saved.pattern.measures[0].slots.map((slot) => slot.duration)).toEqual(["eighth"]);
+	});
+
+	it("propose_tab: repeats that do not play come back as an error naming the bar", async () => {
+		const client = await open(deps);
+		const bar = { notes: [{ string: 3, fret: 0, slot: 0 }] };
+		const r = await call(client, "propose_tab", {
+			name: "Bad",
+			slotsPerBar: 4,
+			bars: [{ ...bar, repeatStart: true }, { ...bar, ending: [1], repeatEnd: true }, { ...bar, ending: [3] }],
+			bpm: 80,
+			timeSignature: "",
+		});
+		expect(r.isError).toBe(true);
+		expect(textOf(r)).toMatch(/Bar 3: ending 3\. should be 2\./);
+		expect(rows.size).toBe(0);
+	});
+
 	it("propose_tab: a bend with its height and a palm-muted note are saved and shown", async () => {
 		const client = await open(deps);
 		const r = await call(client, "propose_tab", {

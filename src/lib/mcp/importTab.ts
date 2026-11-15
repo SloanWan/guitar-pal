@@ -3,13 +3,14 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import type { BeatSlot, Duration, FingerpickPattern, Link, Measure, NoteEffects } from "@/lib/fingerpickTypes";
 import { DURATION_TICKS, measureCapacity } from "@/lib/fingerpickEdit";
 import { indexPattern, spanCovers } from "@/lib/fingerpickIndex";
-import { MAX_ENDING, repeatMarkupError } from "@/lib/fingerpickRepeats";
+import { repeatMarkupError } from "@/lib/fingerpickRepeats";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { isSupportedMeter, meterLabel, SUPPORTED_METERS, type Meter } from "@/lib/strumMeter";
 import {
 	MAX_MEASURES,
 	NOTE_MARKS_SHAPE,
 	PERCUSSION_INPUT,
+	REPEAT_BAR_SHAPE,
 	normalizeImportedPattern,
 	resolveChordName,
 } from "@/lib/tabImport";
@@ -58,15 +59,7 @@ export const IMPORT_SLOT_SCHEMA = z.object({
 
 export const IMPORT_BAR_SCHEMA = z.object({
 	slots: z.array(IMPORT_SLOT_SCHEMA).min(1).max(MAX_SLOTS_PER_BAR),
-	repeatStart: z.boolean().optional().describe("A repeat barline |: opens this bar."),
-	repeatEnd: z.boolean().optional().describe("A repeat barline :| closes this bar."),
-	repeatTimes: z.number().int().min(2).max(8).optional().describe("Total times the repeated section ending here is played; 2 when unmarked. Leave it out under endings: their passes set it."),
-	ending: z
-		.array(z.number().int().min(1).max(MAX_ENDING))
-		.min(1)
-		.max(MAX_ENDING)
-		.optional()
-		.describe('The passes this bar is played on, from the first / second ending bracket over it: [1] under "1.", [2] under "2.", [1, 2] under "1.2.". Every bar under the bracket carries it; write the bars once, as printed, never the repeat written out.'),
+	...REPEAT_BAR_SHAPE,
 });
 
 /** The tool's input, as a raw shape for `registerTool`. */

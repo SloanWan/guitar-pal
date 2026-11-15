@@ -93,7 +93,7 @@ const execute = async (name: ToolName, input: ToolInput): Promise<ToolExecution>
 		case "propose_strum":
 			return proposeStrum(input as ProposeStrumInput, INDEX);
 		case "propose_tab":
-			return proposeTab(input as ProposeTabInput);
+			return proposeTab(input as ProposeTabInput, INDEX);
 		case "show_chord":
 			return showChord(input as ShowChordInput, INDEX);
 	}

@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { proposeStrum, proposeTab, readInput, showChord, strumReadResult, tabReadResult } from "@/lib/assistant/general/execute";
+import { proposeStrum, proposeTab as proposeTabIn, readInput, showChord, strumReadResult, tabReadResult } from "@/lib/assistant/general/execute";
+import type { ProposeTabInput } from "@/lib/assistant/general/tools";
 import { resolveAssistantTurn } from "@/lib/assistant/strum/turn";
 import { resolveTabTurn } from "@/lib/assistant/tab/turn";
 import { INDEX, voicingFor } from "@/lib/assistant/tab/__tests__/fixtures";
 
 const voicings = async () => voicingFor;
+/** propose_tab with the test chord library, as every caller passes one. */
+const proposeTab = (input: ProposeTabInput) => proposeTabIn(input, INDEX);
 
 describe("readInput", () => {
 	it("accepts what each tool needs and nothing less", () => {
@@ -15,6 +18,12 @@ describe("readInput", () => {
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: true });
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: "0", slot: 0 }] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: "e|--", bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
+		// Repeats, endings and a pickup are read through; a malformed one is refused.
+		expect(
+			readInput("propose_tab", { name: "x", slotsPerBar: 8, pickupSlots: 2, bars: [{ notes: [], repeatStart: true, repeatEnd: true, repeatTimes: 3, ending: [1] }], bpm: 0, timeSignature: "" }),
+		).toMatchObject({ ok: true, input: { pickupSlots: 2, bars: [{ repeatStart: true, repeatEnd: true, repeatTimes: 3, ending: [1] }] } });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, bars: [{ notes: [], ending: ["1"] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
+		expect(readInput("propose_tab", { name: "x", slotsPerBar: 8, pickupSlots: "2", bars: [{ notes: [] }], bpm: 0, timeSignature: "" })).toMatchObject({ ok: false });
 		expect(readInput("propose_tab", "nope")).toMatchObject({ ok: false });
 		expect(readInput("show_chord", { chords: ["F#m7"] })).toMatchObject({ ok: true });
 		expect(readInput("show_chord", { chords: [] })).toMatchObject({ ok: false });
@@ -215,5 +224,30 @@ describe("propose_tab", () => {
 		const r = proposeTab({ name: "x", slotsPerBar: 8, bars: [{ notes: [{ string: 1, fret: 0, slot: 9 }] }], bpm: 0, timeSignature: "" });
 		expect(r.isError).toBe(true);
 		expect(r.result).toContain("slot 9");
+	});
+});
+
+describe("propose_tab: chord names (#535)", () => {
+	const bar = (chords: { slot: number; name: string }[]) => ({ notes: [0, 2, 4, 6].map((slot) => ({ string: 3, fret: 2, slot })), chords });
+
+	it("marks each chord on the slot it is written over", () => {
+		const r = proposeTab({ name: "c", slotsPerBar: 8, bars: [bar([{ slot: 0, name: "Am" }, { slot: 4, name: "F" }]), bar([{ slot: 0, name: "N.C." }])], bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(false);
+		if (r.card?.domain !== "tab" || !("tabProposal" in r.card)) throw new Error("no card");
+		const [one, two] = r.card.tabProposal.pattern.measures;
+		expect(one.slots.map((slot) => slot.chord && `${slot.chord.root}${slot.chord.suffix}`)).toEqual(["Aminor", undefined, "Fmajor", undefined]);
+		expect(two.slots[0].chord).toMatchObject({ root: "N.C." });
+	});
+
+	it("leaves off a name the library lacks, and says so", () => {
+		const r = proposeTab({ name: "c", slotsPerBar: 8, bars: [bar([{ slot: 0, name: "Zm" }])], bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(false);
+		expect(r.result).toMatch(/Bar 1: the library has no chord called "Zm"; the mark was left off/);
+	});
+
+	it("refuses a chord where nothing is struck, naming the bar", () => {
+		const r = proposeTab({ name: "c", slotsPerBar: 8, bars: [bar([{ slot: 1, name: "Am" }])], bpm: 0, timeSignature: "" });
+		expect(r.isError).toBe(true);
+		expect(r.result).toMatch(/Bar 1 has the chord "Am" on slot 1, where nothing is struck/);
 	});
 });

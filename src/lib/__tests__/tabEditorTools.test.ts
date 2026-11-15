@@ -79,6 +79,9 @@ describe("barFill", () => {
 		expect(barFill(tab(["half", "half"]).measures[0], [4, 4])).toEqual({ kind: "full", text: "Full" });
 		expect(barFill(tab(["half", "quarter", "eighth"]).measures[0], [4, 4])).toEqual({ kind: "short", text: "Short by an eighth" });
 		expect(barFill(tab(["whole", "quarter"]).measures[0], [3, 4]).text).toBe("Over by a half");
+		// The first bar, short, with more after it: a pickup.
+		expect(barFill(tab(["eighth"]).measures[0], [4, 4], true)).toEqual({ kind: "pickup", text: "Pickup of an eighth" });
+		expect(barFill(tab(["whole", "quarter"]).measures[0], [3, 4], true).kind).toBe("over");
 		expect(lengthInWords(36)).toBe("a quarter and an eighth");
 	});
 });

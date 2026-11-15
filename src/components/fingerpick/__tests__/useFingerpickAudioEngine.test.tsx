@@ -135,3 +135,72 @@ describe("useFingerpickAudioEngine: load", () => {
 		engine.unmount();
 	});
 });
+
+/**
+ * A context whose clock moves on at every read, as a real one does while a pass
+ * is being scheduled, and that records each click it is asked to play. Not a
+ * FakeContext: its `currentTime` field would shadow the getter.
+ */
+class TickingContext {
+	/** The one the engine made. */
+	static made: TickingContext | null = null;
+	state = "running";
+	destination = {};
+	private clock = 0;
+	clicks: { when: number; freq: number }[] = [];
+	constructor() {
+		TickingContext.made = this;
+	}
+	get currentTime() {
+		this.clock += 0.003;
+		return this.clock;
+	}
+	resume() {
+		return Promise.resolve();
+	}
+	close() {
+		this.state = "closed";
+		return Promise.resolve();
+	}
+	createGain() {
+		return { gain: { value: 1 }, connect: <T,>(next: T) => next };
+	}
+	createOscillator() {
+		const clicks = this.clicks;
+		const osc = {
+			frequency: { value: 0 },
+			onended: null as (() => void) | null,
+			connect: <T,>(next: T) => next,
+			start: (when: number) => clicks.push({ when, freq: osc.frequency.value }),
+			stop: () => undefined,
+		};
+		return osc;
+	}
+}
+
+describe("useFingerpickAudioEngine: metronome", () => {
+	it("plays the first beat's click although the clock moved on while the pass was scheduled", async () => {
+		vi.stubGlobal("AudioContext", TickingContext);
+		loader.preloadFingerpickPresets.mockResolvedValue(undefined);
+		const engine = renderEngine();
+		await act(async () => {
+			await engine.current().load();
+		});
+		act(() => engine.current().setMetronomeEnabled(true));
+		const rest = (id: string) => ({
+			id,
+			duration: "whole" as const,
+			isRest: true,
+			strings: Array.from({ length: 6 }, () => ({ fret: null, muted: false })) as FingerpickPattern["measures"][number]["slots"][number]["strings"],
+		});
+		const tab: FingerpickPattern = { id: "t", name: "t", bpm: 60, timeSignature: [4, 4], measures: [{ id: "a", slots: [rest("r1")] }, { id: "b", slots: [rest("r2")] }] };
+		act(() => engine.current().play(tab));
+		const clicks = TickingContext.made?.clicks ?? [];
+		// The accented first click at once (the clock is a few ms in), not bar 2's four seconds on;
+		// then the bar's other beats a second apart.
+		expect(clicks[0].freq).toBe(1200);
+		expect(clicks[0].when).toBeLessThan(0.5);
+		expect(clicks.slice(1, 4).map((c) => c.when - clicks[0].when)).toEqual([1, 2, 3].map((n) => expect.closeTo(n, 1)));
+		engine.unmount();
+	});
+});

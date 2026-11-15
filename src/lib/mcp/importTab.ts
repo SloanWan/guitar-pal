@@ -201,12 +201,21 @@ export function toImportedTabDraft(
 					),
 				);
 			} else if (ticks < capacity) {
+				// A short first bar is a pickup (`pickupLead`): it plays straight into
+				// bar 2, the metronome counting it as a bar's end. Later, it is a misread.
+				const pickup = barIndex === 0 && input.bars.length > 1;
 				warnings.push(
-					issue(
-						"BAR_UNDERFULL",
-						`${barPath}.slots`,
-						`Bar ${barIndex + 1} holds ${describeTicks(ticks)} of ${describeTicks(capacity)}; the rest of the bar is silent. Fine for a pickup bar, otherwise a duration is missing.`,
-					),
+					pickup
+						? issue(
+								"PICKUP",
+								`${barPath}.slots`,
+								`Bar 1 holds ${describeTicks(ticks)} of ${describeTicks(capacity)}: read as a pickup, leading straight into bar 2. If it is not one, a duration is missing.`,
+							)
+						: issue(
+								"BAR_UNDERFULL",
+								`${barPath}.slots`,
+								`Bar ${barIndex + 1} holds ${describeTicks(ticks)} of ${describeTicks(capacity)}, so it plays short; a duration is missing.`,
+							),
 				);
 			}
 		}

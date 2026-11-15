@@ -22,7 +22,7 @@ import {
 import { indexPattern, slurredInside, spanCovers } from "@/lib/fingerpickIndex";
 import { harmonicShift, soundingMidi } from "@/lib/fingerpickPitch";
 import { beatTicks } from "@/lib/fingerpickEdit";
-import type { Meter } from "@/lib/strumMeter";
+import { beatsPerBar, type Meter } from "@/lib/strumMeter";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -727,6 +727,51 @@ export function computeSlotStarts(pattern: FingerpickPattern, bpm: number): Slot
 		});
 	});
 	return starts;
+}
+
+/**
+ * How long before the music its first bar began, in seconds. A first bar
+ * holding less than its meter, with more bars after it, is a pickup: the end
+ * of a bar that started before playback, so the beat grid starts the pickup's
+ * shortfall before t = 0 and its downbeats fall on the barlines. 0 without a
+ * pickup. The editor keeps every bar full; a short first bar comes from an
+ * import or a share.
+ */
+export function pickupLead(pattern: FingerpickPattern, bpm: number): number {
+	if (pattern.measures.length < 2) return 0;
+	const [beats, unit] = pattern.timeSignature;
+	const capacity = beats * (4 / unit);
+	const filled = pattern.measures[0].slots.reduce((sum, slot) => sum + DURATION_QUARTERS[slot.duration], 0);
+	if (filled >= capacity - 1e-9) return 0;
+	return (capacity - filled) * secondsPerQuarter(bpm, pattern.timeSignature);
+}
+
+/** A metronome beat: when it falls, and whether it opens a bar. */
+export interface Beat {
+	time: number;
+	downbeat: boolean;
+}
+
+/**
+ * The beats the metronome clicks over the pattern, counted from the first
+ * bar's start, which is before t = 0 when the tab opens on a pickup
+ * (`pickupLead`). A beat before 0 is kept when its span reaches past 0, so the
+ * sub-beat clicks inside the pickup still sound; the caller skips times before
+ * the pass. Times are rounded to the nanosecond, so a beat on 0 is 0.
+ */
+export function beatGrid(pattern: FingerpickPattern, bpm: number): Beat[] {
+	const secondsPerBeat = 60 / bpm;
+	const total = getTotalPatternDuration(pattern, bpm);
+	const lead = pickupLead(pattern, bpm);
+	const perBar = beatsPerBar(pattern.timeSignature);
+	const grid: Beat[] = [];
+	for (let k = 0; ; k++) {
+		const time = Math.round((k * secondsPerBeat - lead) * 1e9) / 1e9;
+		if (time >= total - 0.001) break;
+		if (time + secondsPerBeat <= 0) continue;
+		grid.push({ time, downbeat: k % perBar === 0 });
+	}
+	return grid;
 }
 
 /** The slot sounding `elapsed` seconds in (the last to have started); null before the first. */

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import {
+	beatGrid,
+	pickupLead,
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
 	secondsPerQuarter,
@@ -102,6 +104,57 @@ function multiMeasurePattern(bpm: number, slotsPerMeasure: BeatSlot[][]): Finger
 		measures: slotsPerMeasure.map((slots, i) => ({ id: `m${i}`, slots })),
 	};
 }
+
+// ─── pickupLead / beatGrid ───────────────────────────────────────────────────
+
+describe("pickupLead", () => {
+	const bar = (prefix: string) => ["q", "q", "q", "q"].map((_, i) => slot(`${prefix}${i}`, "quarter"));
+
+	it("is the first bar's shortfall when it is short and more bars follow", () => {
+		// One quarter of four at 60 BPM: the bar began three seconds earlier.
+		expect(pickupLead(multiMeasurePattern(60, [[slot("p", "quarter")], bar("b")]), 60)).toBeCloseTo(3);
+	});
+
+	it("is 0 for a full first bar, and for a tab of one short bar", () => {
+		expect(pickupLead(multiMeasurePattern(60, [bar("a"), bar("b")]), 60)).toBe(0);
+		expect(pickupLead(pattern(60, [slot("p", "quarter")]), 60)).toBe(0);
+	});
+});
+
+describe("beatGrid", () => {
+	it("counts from the barline without a pickup, as before", () => {
+		const p = multiMeasurePattern(60, [[slot("a", "whole")], [slot("b", "whole")]]);
+		const grid = beatGrid(p, 60);
+		expect(grid.map((b) => b.time)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+		expect(grid.map((b) => b.downbeat)).toEqual([true, false, false, false, true, false, false, false]);
+	});
+
+	it("puts the downbeat on bar 2 after a pickup, and none on the pickup", () => {
+		// 4/4 at 60: a one-beat pickup, then a bar. The pickup's beat is the 4th of a bar.
+		const p = multiMeasurePattern(60, [[slot("p", "quarter")], [slot("b", "whole")]]);
+		const grid = beatGrid(p, 60);
+		expect(grid).toEqual([
+			{ time: 0, downbeat: false },
+			{ time: 1, downbeat: true },
+			{ time: 2, downbeat: false },
+			{ time: 3, downbeat: false },
+			{ time: 4, downbeat: false },
+		]);
+	});
+
+	it("keeps a beat starting before 0 whose span reaches into the pickup (Greensleeves in 6/8)", () => {
+		// ♩. = 50: a beat is 1.2 s, an eighth 0.4 s. A one-eighth pickup leaves 5 eighths
+		// before 0: beats at −2.0 s (dropped), −0.8 s (kept for its sub-beat at 0), 0.4 s (bar 2).
+		const eighth = (id: string) => slot(id, "eighth");
+		const p: FingerpickPattern = {
+			...multiMeasurePattern(50, [[eighth("p")], ["a", "b", "c", "d", "e", "f"].map(eighth)]),
+			timeSignature: [6, 8],
+		};
+		const grid = beatGrid(p, 50);
+		expect(grid.map((b) => b.time)).toEqual([-0.8, 0.4, 1.6]);
+		expect(grid.map((b) => b.downbeat)).toEqual([false, true, false]);
+	});
+});
 
 // ─── fingerpickPatternToScheduleEvents ───────────────────────────────────────
 

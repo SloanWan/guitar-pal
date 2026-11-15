@@ -5,7 +5,8 @@
    chords, books; General speaks in ink); the player's own bubbles are grey. A reply is
    one group — the pick at its foot, the first piece round, the last piece carrying the
    tail corner — and the card a reply holds is that group's last piece.
-   On a phone the popover fills the window under the app bar.
+   On a phone it is a full-screen dialog instead (`.as-full`, #528). Either frame fits
+   what the on-screen keyboard leaves: the launcher sizes it from the visual viewport.
    ===================================================================================== */
 /* Unlayered: the popover primitive sets its own width and padding as utilities, which
    outrank anything in @layer components. */
@@ -18,11 +19,35 @@
 	overflow: hidden;
 	color: var(--gp-ink);
 }
-@media (max-width: 719.98px) {
-	.as-pop {
-		width: calc(100vw - 16px);
-		max-width: none;
-		height: min(calc(100dvh - var(--gp-header-h) - 12px), var(--radix-popover-content-available-height));
+/* The phone's frame: the whole screen, the page locked behind it. Its top and height
+   are the visual viewport's, written by the launcher — above the keyboard while it is
+   up; until the first measure, the window. */
+.as-full {
+	position: fixed;
+	z-index: 50;
+	top: 0;
+	left: 0;
+	width: 100%;
+	max-width: none;
+	height: 100dvh;
+	padding: var(--gp-safe-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+	background: var(--gp-sheet);
+	outline: none;
+	animation: as-full-in var(--gp-d-state) var(--gp-ease-state);
+}
+/* The keyboard covers the home indicator; its inset would only be a gap above the keys. */
+.as-full[data-keyboard] {
+	padding-bottom: 0;
+}
+@keyframes as-full-in {
+	from {
+		transform: translateY(16px);
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.as-full {
+		animation: none;
 	}
 }
 
@@ -66,11 +91,9 @@
 		height: var(--as-h, 480px);
 		min-height: 0;
 	}
-	@media (max-width: 719.98px) {
-		.as-panel {
-			flex: 1 1 0;
-			height: auto;
-		}
+	.as-full .as-panel {
+		flex: 1 1 0;
+		height: auto;
 	}
 	/* The frame while the panel's code is still on its way (#445). */
 	.as-panel-loading {
@@ -864,6 +887,14 @@
 		outline: none;
 		box-shadow: inset 0 0 0 1.5px var(--gp-ink);
 	}
+	/* iOS zooms the page into a field set under 16px as it takes focus: on a touch
+	   screen the composer, and the saved chats' rename field, are 16px. */
+	@media (pointer: coarse) {
+		.as-input,
+		.as-lib-rename .gp-input {
+			font-size: 16px;
+		}
+	}
 	.as-input::placeholder {
 		color: var(--gp-ink-3);
 	}
@@ -907,7 +938,7 @@
 		color: var(--gp-ink-2);
 	}
 
-	/* the grip: the panel's bottom edge, dragged to resize; a phone's panel fills the window */
+	/* the grip: the popover's bottom edge, dragged to resize (the full-screen panel has none) */
 	.as-grip {
 		display: flex;
 		flex: none;
@@ -931,11 +962,6 @@
 	}
 	.as-grip:focus-visible {
 		outline: none;
-	}
-	@media (max-width: 719.98px) {
-		.as-grip {
-			display: none;
-		}
 	}
 
 	@keyframes as-blow {

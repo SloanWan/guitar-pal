@@ -143,6 +143,10 @@ const METRONOME_TICK_DURATION_S = 0.05;
 const METRONOME_ACCENT_FREQ = 1200;
 const METRONOME_NORMAL_FREQ = 800;
 const METRONOME_ACCENT_GAIN_MULT = 1.5;
+// A click this late is played at once rather than dropped. Starting a pass
+// schedules the notes first, and the audio clock can move a render quantum on
+// before the clicks: the first beat's click would land a few ms in the past.
+const METRONOME_LATE_TOLERANCE_S = 0.05;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -532,7 +536,7 @@ export function useFingerpickAudioEngine() {
 			// Beat tick — always scheduled
 			if (inPass(beatTime, bounds, startOffset)) {
 				const when = passOffset + toPassTime(beatTime, bounds);
-				if (when >= ctx.currentTime) scheduleTick(ctx, when, isAccentBeat);
+				if (when >= ctx.currentTime - METRONOME_LATE_TOLERANCE_S) scheduleTick(ctx, Math.max(when, ctx.currentTime), isAccentBeat);
 			}
 
 			// Sub-beat ticks, evenly through the beat, never accented
@@ -540,7 +544,7 @@ export function useFingerpickAudioEngine() {
 				const t = beatTime + (spb * k) / clicksPerBeat;
 				if (inPass(t, bounds, startOffset) && t < tickEnd) {
 					const when = passOffset + toPassTime(t, bounds);
-					if (when >= ctx.currentTime) scheduleTick(ctx, when, false);
+					if (when >= ctx.currentTime - METRONOME_LATE_TOLERANCE_S) scheduleTick(ctx, Math.max(when, ctx.currentTime), false);
 				}
 			}
 		}

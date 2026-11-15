@@ -193,3 +193,49 @@ describe("buildTabDraft", () => {
 		refuses({ slotsPerBar: 8, bars: [], timeSignature: [4, 4] }, /no bars/);
 	});
 });
+
+describe("buildTabDraft: repeats, endings and a pickup (#534)", () => {
+	const eighths = (fret: number) => [0, 2, 4, 6, 8, 10].map((slot) => note(3, fret, slot));
+	const ticks = (m: DraftMeasure) => m.slots.reduce((sum, slot) => sum + DURATION_TICKS[slot.duration], 0);
+
+	it("carries a bar's barlines and ending onto its measure", () => {
+		const result = buildTabDraft({
+			slotsPerBar: 12,
+			timeSignature: [6, 8],
+			bars: [
+				{ notes: eighths(0), repeatStart: true },
+				{ notes: eighths(2), ending: [1], repeatEnd: true },
+				{ notes: eighths(2), ending: [2] },
+			],
+		});
+		expect(measures(result).map((m) => ({ ...m, slots: undefined }))).toEqual([
+			{ slots: undefined, repeatStart: true },
+			{ slots: undefined, repeatEnd: true, ending: [1] },
+			{ slots: undefined, ending: [2] },
+		]);
+	});
+
+	it("keeps a play count only on a :|", () => {
+		const result = buildTabDraft({ slotsPerBar: 12, timeSignature: [6, 8], bars: [{ notes: eighths(0), repeatTimes: 3 }, { notes: eighths(0), repeatEnd: true, repeatTimes: 3 }] });
+		expect(measures(result).map((m) => (m as { repeatTimes?: number }).repeatTimes)).toEqual([undefined, 3]);
+	});
+
+	it("writes a pickup as the end of a bar: its slots only, the same size", () => {
+		// Greensleeves: one eighth (two sixteenth slots) before bar 2, on slot 0 of the pickup.
+		const result = buildTabDraft({ slotsPerBar: 12, timeSignature: [6, 8], pickupSlots: 2, bars: [{ notes: [note(3, 2, 0)] }, { notes: eighths(0) }] });
+		const [pickup, bar] = measures(result);
+		expect(ticks(pickup)).toBe(DURATION_TICKS.eighth);
+		expect(pickup.slots.map((slot) => slot.duration)).toEqual(["eighth"]);
+		expect(ticks(bar)).toBe(measureCapacity([6, 8]));
+	});
+
+	it("refuses a pickup that is no pickup, and a note past its end", () => {
+		const two = [{ notes: [note(3, 2, 0)] }, { notes: eighths(0) }];
+		expect(buildTabDraft({ slotsPerBar: 12, timeSignature: [6, 8], pickupSlots: 12, bars: two })).toMatchObject({ ok: false, error: expect.stringMatching(/pickupSlots 12 is not a pickup: it is 1 to 11/) });
+		expect(buildTabDraft({ slotsPerBar: 12, timeSignature: [6, 8], pickupSlots: 2, bars: two.slice(0, 1) })).toMatchObject({ ok: false, error: expect.stringMatching(/with one bar, leave pickupSlots out/) });
+		expect(buildTabDraft({ slotsPerBar: 12, timeSignature: [6, 8], pickupSlots: 2, bars: [{ notes: [note(3, 2, 5)] }, { notes: eighths(0) }] })).toMatchObject({
+			ok: false,
+			error: expect.stringMatching(/Bar 1 has a note on slot 5; with 2 slots in the pickup the last one is 1/),
+		});
+	});
+});

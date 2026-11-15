@@ -14,7 +14,8 @@ import { beatUnitGlyph, meterLabel, SUPPORTED_METERS } from "@/lib/strumMeter";
 import { patternNotation } from "@/lib/strumNotation";
 import { patternRhythm } from "@/lib/strumRhythm";
 import { chordAbbreviation, progressionCapo } from "@/lib/strumProgressions";
-import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, type ValidationIssue } from "@/lib/tabImport";
+import { MAX_MEASURES, NOTE_MARKS_SHAPE, PERCUSSION_INPUT, REPEAT_BAR_SHAPE, type ValidationIssue } from "@/lib/tabImport";
+import { PICKUP_SLOTS_DESCRIPTION, PROPOSED_CHORDS_DESCRIPTION, PROPOSED_CHORD_SHAPE } from "@/lib/assistant/general/tools";
 import { patternToAsciiTab } from "./asciiTab";
 import { IMPORT_TAB_SHAPE, importTab, patternToImportBars } from "./importTab";
 
@@ -250,7 +251,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"propose_tab",
 		{
 			...titled("Propose a fingerpicking tab", WRITE_ANNOTATIONS),
-			description: `Use this when the player wants a fingerpicking pattern, a riff, a melody or an exercise they can hear, loop or play along with, or has pasted a text (ASCII) tab to play. Not for a tab in a photo, screenshot or scan (that is import_tab), nor for explaining a technique. Notes go on a grid of even slots per bar, so the rhythm is exact and any fret can be written: say how many slots a bar has, then put each note on one. Use this when composing, and for a text (ASCII) tab you were given — lay each column of the tab on a slot. For a tab read off an image or a printed page, where the note values are written, use import_tab instead. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
+			description: `Use this when the player wants a fingerpicking pattern, a riff, a melody or an exercise they can hear, loop or play along with, or has pasted a text (ASCII) tab to play. Not for a tab in a photo, screenshot or scan (that is import_tab), nor for explaining a technique. Notes go on a grid of even slots per bar, so the rhythm is exact and any fret can be written: say how many slots a bar has, then put each note on one. Use this when composing, and for a text (ASCII) tab you were given — lay each column of the tab on a slot. Write a repeated section once, with its repeat barlines and first / second endings (as a text tab marks them, or when composing a section played twice), never written out; write a pickup with pickupSlots, never as a full bar that starts with silence. For a tab read off an image or a printed page, where the note values are written, use import_tab instead. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
 			inputSchema: {
 				name: z.string().max(80).describe("Two or three words."),
 				slotsPerBar: z
@@ -278,6 +279,8 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 								.max(96)
 								.optional()
 								.describe("Right-hand hits on slots of this bar, when the music has them."),
+							chords: z.array(z.object(PROPOSED_CHORD_SHAPE)).max(96).optional().describe(PROPOSED_CHORDS_DESCRIPTION),
+							...REPEAT_BAR_SHAPE,
 						}),
 					)
 					.min(1)
@@ -285,10 +288,11 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 					.describe("The bars in order. A bar with no notes is a bar of rest."),
 				bpm: z.number().int().min(0).max(300).describe("Beats per minute, counting the beat (♩ in 4/4, ♩. in 6/8); 0 when the player named no tempo."),
 				timeSignature: z.string().describe(`${SUPPORTED_METERS.map(meterLabel).join(", ")}; empty for 4/4.`),
+				pickupSlots: z.number().int().min(1).max(95).optional().describe(PICKUP_SLOTS_DESCRIPTION),
 			},
 		},
-		async ({ name, slotsPerBar, bars, bpm, timeSignature }) => {
-			const built = proposeTab({ name, slotsPerBar, bars, bpm, timeSignature });
+		async ({ name, slotsPerBar, bars, bpm, timeSignature, pickupSlots }) => {
+			const built = proposeTab({ name, slotsPerBar, bars, bpm, timeSignature, ...(pickupSlots !== undefined ? { pickupSlots } : {}) }, await deps.chordIndex());
 			if (built.isError || !built.card || !("tabProposal" in built.card)) return text(built.result, true);
 			const { pattern, warnings } = built.card.tabProposal;
 			const saved = await save({ kind: "fingerpick", pattern });
@@ -301,7 +305,7 @@ export function createGuitarPalServer(deps: GuitarPalMcpDeps): McpServer {
 		"import_tab",
 		{
 			...titled("Import a transcribed tab", WRITE_ANNOTATIONS),
-			description: `Use this when the player shares a photo, screenshot or scan of a guitar tab and wants to play it, hear it or bring it into Guitar Pal. Not for composing (that is propose_tab), nor for a question about what the image shows. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in \`uncertain\` — the player checks those against the original. Write repeat barlines (|: and :|) and first / second endings (the "1." / "2." brackets) on the bars that carry them, once each, as printed: never write a repeat out. The app validates the durations against the meter, bounds the frets and checks that the repeats play; it cannot tell a note on the wrong string, so be exact about strings. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
+			description: `Use this when the player shares a photo, screenshot or scan of a guitar tab and wants to play it, hear it or bring it into Guitar Pal. Not for composing (that is propose_tab), nor for a question about what the image shows. Transcribe, do not compose: copy every fret and every written note value exactly as printed, in order, and do not correct or simplify what looks odd. Each bar is a list of slots; each slot has the duration printed (stems, flags and dots) and the notes struck together in it as {string, fret} with string 1 = high e and 6 = low E; a rest is a slot with rest: true and no notes. Where you could not read something with confidence, still write your best reading and name the place in \`uncertain\` — the player checks those against the original. Write repeat barlines (|: and :|) and first / second endings (the "1." / "2." brackets) on the bars that carry them, once each, as printed: never write a repeat out. A pickup (a first bar shorter than the meter) is written short, as printed: never pad it with rests. The app validates the durations against the meter, bounds the frets and checks that the repeats play; it cannot tell a note on the wrong string, so be exact about strings. ${effects} Returns the link and the tab as the app holds it, or an error naming the bar to fix.`,
 			inputSchema: IMPORT_TAB_SHAPE,
 		},
 		async (input) => {

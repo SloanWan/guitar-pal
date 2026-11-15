@@ -2,6 +2,7 @@ import type { ChordIndexEntry } from "@/lib/chordSearch";
 import { isSupportedMeter } from "@/lib/strumMeter";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import { normalizeImportedPattern } from "@/lib/tabImport/normalizeImportedPattern";
+import { repeatMarkupError } from "@/lib/fingerpickRepeats";
 import { buildProposal } from "@/lib/assistant/strum/buildProposal";
 import type { EditIntentReading } from "@/lib/assistant/strum/editIntent";
 import type { AssistantTurnOutcome } from "@/lib/assistant/strum/turn";
@@ -79,7 +80,31 @@ function readProposedBars(value: unknown): ProposeTabInput["bars"] | null {
 				hits.push({ slot: h.slot, kind: h.kind });
 			}
 		}
-		bars.push(hits.length > 0 ? { notes: read, hits } : { notes: read });
+		const chordsValue = (bar as { chords?: unknown }).chords;
+		const chords: NonNullable<ProposeTabInput["bars"][number]["chords"]> = [];
+		if (chordsValue !== undefined) {
+			if (!Array.isArray(chordsValue)) return null;
+			for (const mark of chordsValue) {
+				if (typeof mark !== "object" || mark === null) return null;
+				const c = mark as Record<string, unknown>;
+				if (typeof c.slot !== "number" || typeof c.name !== "string") return null;
+				chords.push({ slot: c.slot, name: c.name });
+			}
+		}
+		const b = bar as Record<string, unknown>;
+		if (b.repeatStart !== undefined && typeof b.repeatStart !== "boolean") return null;
+		if (b.repeatEnd !== undefined && typeof b.repeatEnd !== "boolean") return null;
+		if (b.repeatTimes !== undefined && typeof b.repeatTimes !== "number") return null;
+		if (b.ending !== undefined && !(Array.isArray(b.ending) && b.ending.every((pass) => typeof pass === "number"))) return null;
+		bars.push({
+			notes: read,
+			...(hits.length > 0 ? { hits } : {}),
+			...(chords.length > 0 ? { chords } : {}),
+			...(b.repeatStart === true ? { repeatStart: true } : {}),
+			...(b.repeatEnd === true ? { repeatEnd: true } : {}),
+			...(typeof b.repeatTimes === "number" ? { repeatTimes: b.repeatTimes } : {}),
+			...(Array.isArray(b.ending) && b.ending.length > 0 ? { ending: b.ending as number[] } : {}),
+		});
 	}
 	return bars;
 }
@@ -109,8 +134,19 @@ export function readInput(name: ToolName, input: unknown): { ok: true; input: Re
 				typeof v.slotsPerBar === "number" &&
 				bars !== null &&
 				typeof v.bpm === "number" &&
-				typeof v.timeSignature === "string"
-				? { ok: true, input: { name: v.name, slotsPerBar: v.slotsPerBar, bars, bpm: v.bpm, timeSignature: v.timeSignature } }
+				typeof v.timeSignature === "string" &&
+				(v.pickupSlots === undefined || typeof v.pickupSlots === "number")
+				? {
+						ok: true,
+						input: {
+							name: v.name,
+							slotsPerBar: v.slotsPerBar,
+							bars,
+							bpm: v.bpm,
+							timeSignature: v.timeSignature,
+							...(typeof v.pickupSlots === "number" ? { pickupSlots: v.pickupSlots } : {}),
+						},
+					}
 				: { ok: false, error: "expected name, slotsPerBar, bars[] of {notes:[{string,fret,slot}]}, bpm and timeSignature." };
 		}
 		case "show_chord":
@@ -224,7 +260,7 @@ export function proposeStrum(input: ProposeStrumInput, index: readonly ChordInde
  * *player* pasted, where the rhythm is only in the spacing and guessing it is
  * the best that can be done (#268).
  */
-export function proposeTab(input: ProposeTabInput): ToolExecution {
+export function proposeTab(input: ProposeTabInput, index: readonly ChordIndexEntry[]): ToolExecution {
 	let timeSignature: [number, number] = [4, 4];
 	const meter = input.timeSignature.trim();
 	if (meter !== "") {
@@ -235,17 +271,22 @@ export function proposeTab(input: ProposeTabInput): ToolExecution {
 		}
 		timeSignature = parsed;
 	}
-	const built = buildTabDraft({ slotsPerBar: input.slotsPerBar, bars: input.bars, timeSignature });
+	const built = buildTabDraft({ slotsPerBar: input.slotsPerBar, bars: input.bars, timeSignature, pickupSlots: input.pickupSlots, chordIndex: index });
 	if (!built.ok) return { result: built.error, isError: true };
 	// The tempo rides on the draft rather than being patched on afterwards, so
 	// the validator sees the tempo the model asked for. `0` means none was asked
 	// for, and the field stays off.
 	const bpm = input.bpm > 0 ? input.bpm : null;
 	const draft = bpm === null ? built.draft : { ...built.draft, bpm };
-	const { pattern, errors, warnings } = normalizeImportedPattern(draft);
+	const { pattern, errors, warnings: checked } = normalizeImportedPattern(draft);
+	// A chord name the library lacks was left off; the model hears which.
+	const warnings = [...built.warnings.map((message) => ({ code: "CHORD_UNKNOWN", path: "bars", message })), ...checked];
 	if (!pattern) {
 		return { result: `The pattern did not validate: ${errors.map((e) => e.message).join(" ")}`, isError: true };
 	}
+	// Barlines or endings that do not play go back for one repair, naming the bar.
+	const repeats = repeatMarkupError(pattern.measures);
+	if (repeats) return { result: `The repeats do not play: ${repeats}`, isError: true };
 	const named = { ...pattern, name: input.name.trim() || pattern.name };
 	return {
 		result: `Made "${named.name}": ${named.measures.length} bar(s), ${named.timeSignature.join("/")}${warnings.length ? ` (${warnings.length} warning(s): ${warnings.map((w) => w.message).join("; ")})` : ""}. Shown to the player as a card.`,

@@ -1,6 +1,7 @@
 import * as z from "zod";
 import type { EffectKind, LinkKind, PercussionKind } from "@/lib/fingerpickTypes";
 import { EFFECT_DEFS, LINK_DEFS, PERCUSSION_DEFS } from "@/lib/techniqueRegistry";
+import { MAX_ENDING } from "@/lib/fingerpickRepeats";
 
 /**
  * The marks a note carries in the shapes a model writes — `import_tab`,
@@ -43,6 +44,21 @@ export const NOTE_MARKS_SHAPE = {
 };
 
 export type NoteMarksInput = z.infer<z.ZodObject<typeof NOTE_MARKS_SHAPE>>;
+
+/** A bar's repeat barlines and ending, as `import_tab` and `propose_tab` both take them (#523, #534). */
+export const REPEAT_BAR_SHAPE = {
+	repeatStart: z.boolean().optional().describe("A repeat barline |: opens this bar."),
+	repeatEnd: z.boolean().optional().describe("A repeat barline :| closes this bar."),
+	repeatTimes: z.number().int().min(2).max(8).optional().describe("Total times the repeated section ending here is played; 2 when unmarked. Leave it out under endings: their passes set it."),
+	ending: z
+		.array(z.number().int().min(1).max(MAX_ENDING))
+		.min(1)
+		.max(MAX_ENDING)
+		.optional()
+		.describe('The passes this bar is played on, from the first / second ending bracket over it: [1] under "1.", [2] under "2.", [1, 2] under "1.2.". Every bar under the bracket carries it; write the bars once, as printed, never the repeat written out.'),
+};
+
+export type RepeatBarInput = z.infer<z.ZodObject<typeof REPEAT_BAR_SHAPE>>;
 
 /** A JSON schema for the Anthropic tool definition, without the `$schema` header. */
 export function jsonSchemaOf(schema: z.ZodType): Record<string, unknown> {

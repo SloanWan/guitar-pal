@@ -1,0 +1,924 @@
+{
+	"name": "Greensleeves",
+	"timeSignature": "6/8",
+	"bpm": 50,
+	"bars": [
+		{
+			"slots": [
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						}
+					]
+				}
+			],
+			"repeatStart": true
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						},
+						{
+							"string": 6,
+							"fret": 3
+						}
+					],
+					"chord": "G"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "Em"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 6,
+							"fret": 1
+						}
+					],
+					"chord": "F"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "E"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 4,
+							"fret": 2
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						},
+						{
+							"string": 6,
+							"fret": 3
+						}
+					],
+					"chord": "G"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "Em"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "E"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 4,
+							"fret": 4
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				}
+			],
+			"repeatEnd": true,
+			"ending": [
+				1
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				}
+			],
+			"ending": [
+				2
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 3
+						},
+						{
+							"string": 5,
+							"fret": 3
+						}
+					],
+					"chord": "C"
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 3
+						},
+						{
+							"string": 5,
+							"fret": 3
+						}
+					]
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						}
+					]
+				}
+			],
+			"repeatStart": true
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						},
+						{
+							"string": 6,
+							"fret": 3
+						}
+					],
+					"chord": "G"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "Em"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 6,
+							"fret": 1
+						}
+					],
+					"chord": "F"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "E"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 4,
+							"fret": 2
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 3
+						},
+						{
+							"string": 5,
+							"fret": 3
+						}
+					],
+					"chord": "C"
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 3
+						},
+						{
+							"string": 5,
+							"fret": 3
+						}
+					]
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 1
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 1,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "quarter",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 3
+						},
+						{
+							"string": 6,
+							"fret": 3
+						}
+					],
+					"chord": "G"
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 0
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "Em"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 1
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 2,
+							"fret": 0
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						}
+					]
+				},
+				{
+					"duration": "dotted-eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						},
+						{
+							"string": 6,
+							"fret": 0
+						}
+					],
+					"chord": "E"
+				},
+				{
+					"duration": "sixteenth",
+					"notes": [
+						{
+							"string": 4,
+							"fret": 4
+						}
+					]
+				},
+				{
+					"duration": "eighth",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"slots": [
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					],
+					"chord": "Am"
+				},
+				{
+					"duration": "dotted-quarter",
+					"notes": [
+						{
+							"string": 3,
+							"fret": 2
+						},
+						{
+							"string": 5,
+							"fret": 0
+						}
+					]
+				}
+			],
+			"repeatEnd": true
+		}
+	]
+}

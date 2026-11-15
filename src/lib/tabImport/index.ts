@@ -17,6 +17,8 @@ export {
 	NOTE_MARKS_SHAPE,
 	OFFERED_EFFECT_KINDS,
 	PERCUSSION_INPUT,
+	REPEAT_BAR_SHAPE,
 	jsonSchemaOf,
 	type NoteMarksInput,
+	type RepeatBarInput,
 } from "./noteInput";

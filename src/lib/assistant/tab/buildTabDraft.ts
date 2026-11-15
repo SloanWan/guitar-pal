@@ -1,7 +1,9 @@
 import type { Link, NoteEffects, Percussion } from "@/lib/fingerpickTypes";
-import { MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
+import { DURATION_TICKS, MAX_FRET, measureCapacity } from "@/lib/fingerpickEdit";
 import { plainDurationForTicks } from "@/lib/fingerpickPickSequence";
-import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, type ImportedTabDraft } from "@/lib/tabImport";
+import type { ChordIndexEntry } from "@/lib/chordSearch";
+import type { ChordRef } from "@/lib/strumPatterns";
+import { EFFECTS_INPUT, OFFERED_EFFECT_KINDS, resolveChordName, type ImportedTabDraft, type RepeatBarInput } from "@/lib/tabImport";
 import { LINK_KINDS, PERCUSSION_KINDS, isLinkKind, isPercussionKind } from "@/lib/techniqueRegistry";
 import { barSlots, type GridNote } from "@/lib/assistant/tab/draftSlots";
 
@@ -41,19 +43,35 @@ export interface ProposedHit {
 	kind: string;
 }
 
-export interface ProposedBar {
+/** A chord name over a slot of the bar, as written; "N.C." for no chord. */
+export interface ProposedChord {
+	slot: number;
+	name: string;
+}
+
+export interface ProposedBar extends RepeatBarInput {
 	notes: ProposedNote[];
 	hits?: ProposedHit[];
+	chords?: ProposedChord[];
 }
 
 export interface BuildTabDraftInput {
 	slotsPerBar: number;
 	bars: readonly ProposedBar[];
 	timeSignature: [number, number];
+	/**
+	 * Bar 1 is a pickup holding only the last this-many slots of a bar, its
+	 * notes' slots counted from 0 within them; it plays straight into bar 2
+	 * (`pickupLead`). Absent, every bar is full.
+	 */
+	pickupSlots?: number;
+	/** The library a chord name is looked up in (`resolveChordName`). */
+	chordIndex?: readonly ChordIndexEntry[];
 }
 
 export type BuildTabDraftResult =
-	| { ok: true; draft: ImportedTabDraft }
+	/** `warnings`: chord names the library lacks, left off, each naming its bar. */
+	| { ok: true; draft: ImportedTabDraft; warnings: string[] }
 	| { ok: false; error: string };
 
 /** The effects map as the model wrote it, or why it cannot be taken. */
@@ -108,17 +126,29 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 		};
 	}
 
+	const { pickupSlots } = input;
+	if (pickupSlots !== undefined) {
+		if (!Number.isInteger(pickupSlots) || pickupSlots < 1 || pickupSlots >= slotsPerBar) {
+			return { ok: false, error: `pickupSlots ${pickupSlots} is not a pickup: it is 1 to ${slotsPerBar - 1}, the slots of a bar the pickup holds. Leave it out when bar 1 is full.` };
+		}
+		if (bars.length < 2) return { ok: false, error: "A pickup leads into a bar after it; with one bar, leave pickupSlots out." };
+	}
+
 	const capacity = measureCapacity(timeSignature);
-	const measures: { slots: ReturnType<typeof barSlots>["slots"] }[] = [];
+	const measures: ({ slots: (ReturnType<typeof barSlots>["slots"][number] & { chord?: ChordRef })[] } & RepeatBarInput)[] = [];
+	const warnings: string[] = [];
 
 	for (const [index, bar] of bars.entries()) {
 		const where = `Bar ${index + 1}`;
+		// A pickup is the end of a bar: fewer slots, the same size each.
+		const positions = index === 0 && pickupSlots !== undefined ? pickupSlots : slotsPerBar;
+		const barCapacity = (capacity / slotsPerBar) * positions;
 		const byPosition = new Map<number, GridNote[]>();
 		const taken = new Set<string>();
 
 		for (const note of bar.notes) {
-			if (!Number.isInteger(note.slot) || note.slot < 0 || note.slot >= slotsPerBar) {
-				return { ok: false, error: `${where} has a note on slot ${note.slot}; with ${slotsPerBar} slots a bar the last one is ${slotsPerBar - 1}.` };
+			if (!Number.isInteger(note.slot) || note.slot < 0 || note.slot >= positions) {
+				return { ok: false, error: `${where} has a note on slot ${note.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
 			}
 			if (!Number.isInteger(note.string) || note.string < 1 || note.string > 6) {
 				return { ok: false, error: `${where} has a note on string ${note.string}; strings are 1 (high e) to 6 (low E).` };
@@ -153,8 +183,8 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 
 		const hits = new Map<number, Percussion>();
 		for (const hit of bar.hits ?? []) {
-			if (!Number.isInteger(hit.slot) || hit.slot < 0 || hit.slot >= slotsPerBar) {
-				return { ok: false, error: `${where} has a hit on slot ${hit.slot}; with ${slotsPerBar} slots a bar the last one is ${slotsPerBar - 1}.` };
+			if (!Number.isInteger(hit.slot) || hit.slot < 0 || hit.slot >= positions) {
+				return { ok: false, error: `${where} has a hit on slot ${hit.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
 			}
 			if (!isPercussionKind(hit.kind)) {
 				return { ok: false, error: `"${hit.kind}" is not a hit this app knows. Use ${PERCUSSION_KINDS.join(", ")}.` };
@@ -163,8 +193,40 @@ export function buildTabDraft(input: BuildTabDraftInput): BuildTabDraftResult {
 		}
 
 		// A bar is exactly its slots, so `barSlots` cannot overflow here.
-		measures.push({ slots: barSlots(byPosition, slotsPerBar, capacity, hits).slots });
+		const slots: (ReturnType<typeof barSlots>["slots"][number] & { chord?: ChordRef })[] = barSlots(byPosition, positions, barCapacity, hits).slots;
+
+		// A chord mark sits on the slot struck at its position, as import_tab's does.
+		for (const mark of bar.chords ?? []) {
+			if (!Number.isInteger(mark.slot) || mark.slot < 0 || mark.slot >= positions) {
+				return { ok: false, error: `${where} has a chord on slot ${mark.slot}; with ${positions} slots ${positions === slotsPerBar ? "a bar" : "in the pickup"} the last one is ${positions - 1}.` };
+			}
+			if (!byPosition.has(mark.slot) && !hits.has(mark.slot)) {
+				return { ok: false, error: `${where} has the chord "${mark.name}" on slot ${mark.slot}, where nothing is struck; put it on the slot of the note it is written over.` };
+			}
+			const chord = resolveChordName(mark.name, input.chordIndex ?? []);
+			if (!chord) {
+				warnings.push(`${where}: the library has no chord called "${mark.name}"; the mark was left off.`);
+				continue;
+			}
+			const tick = Math.round((mark.slot / positions) * barCapacity / DURATION_TICKS["32nd"]) * DURATION_TICKS["32nd"];
+			let at = 0;
+			const target = slots.find((slot) => {
+				const starts = at === tick;
+				at += DURATION_TICKS[slot.duration];
+				return starts;
+			});
+			if (target) target.chord = chord;
+		}
+
+		// Its barlines and ending ride along for the validator and `playOrder`.
+		measures.push({
+			slots,
+			...(bar.repeatStart ? { repeatStart: true } : {}),
+			...(bar.repeatEnd ? { repeatEnd: true } : {}),
+			...(bar.repeatEnd && bar.repeatTimes !== undefined ? { repeatTimes: bar.repeatTimes } : {}),
+			...(bar.ending ? { ending: bar.ending } : {}),
+		});
 	}
 
-	return { ok: true, draft: { timeSignature, measures } };
+	return { ok: true, draft: { timeSignature, measures }, warnings };
 }

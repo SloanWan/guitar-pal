@@ -307,6 +307,10 @@
 	.te-fill[data-kind="over"] {
 		color: var(--gp-bad);
 	}
+	/* A pickup is meant short: said, not warned. */
+	.te-fill[data-kind="pickup"] {
+		color: var(--gp-ink-3);
+	}
 	.te-barbtn {
 		display: inline-flex;
 		flex: none;

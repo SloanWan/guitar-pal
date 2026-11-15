@@ -185,9 +185,16 @@ export function lengthInWords(ticks: number): string {
 }
 
 /** Whether a bar adds up: "full", or what it is short or over by. */
-export function barFill(measure: Measure, timeSignature: [number, number]): { kind: "full" | "short" | "over"; text: string } {
-	const diff = usedUnits(measure.slots) - measureCapacity(timeSignature);
+export function barFill(
+	measure: Measure,
+	timeSignature: [number, number],
+	/** The tab's first bar with more after it: short, it is a pickup (`pickupLead`), not a bar to fill. */
+	pickup = false,
+): { kind: "full" | "short" | "over" | "pickup"; text: string } {
+	const used = usedUnits(measure.slots);
+	const diff = used - measureCapacity(timeSignature);
 	if (diff === 0) return { kind: "full", text: "Full" };
+	if (diff < 0 && pickup) return { kind: "pickup", text: `Pickup of ${lengthInWords(used)}` };
 	return diff < 0
 		? { kind: "short", text: `Short by ${lengthInWords(-diff)}` }
 		: { kind: "over", text: `Over by ${lengthInWords(diff)}` };

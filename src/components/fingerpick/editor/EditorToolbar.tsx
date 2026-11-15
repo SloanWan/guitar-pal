@@ -83,7 +83,7 @@ export default function EditorToolbar({ working, commit, cursor, slots, onBlocke
 	const measure = working.measures[cursor.measureIndex];
 	const slot = measure?.slots[cursor.slotIndex];
 	const note = slot?.strings[cursor.stringIndex];
-	const fill = measure ? barFill(measure, working.timeSignature) : null;
+	const fill = measure ? barFill(measure, working.timeSignature, cursor.measureIndex === 0 && working.measures.length > 1) : null;
 	const bars = working.measures.length;
 	const m = cursor.measureIndex;
 

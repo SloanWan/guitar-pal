@@ -5,10 +5,10 @@ import { toast } from "sonner";
 
 import type { FingerpickPattern } from "@/lib/fingerpickTypes";
 import { beatDivision } from "@/lib/fingerpickEdit";
-import { beatsPerBar } from "@/lib/strumMeter";
 import {
 	fingerpickPatternToScheduleEvents,
 	getTotalPatternDuration,
+	beatGrid,
 	computeLoopOffset,
 	getProgressAtTime,
 	findSlotStartTime,
@@ -20,6 +20,7 @@ import {
 	DEFAULT_ROLL_PARAMS,
 	DEFAULT_SLIDE_PARAMS,
 	DEFAULT_SLAP_PARAMS,
+	type Beat,
 	type SlapParams,
 	type ScheduleEvent,
 	type MeasureBoundary,
@@ -201,23 +202,6 @@ export interface VoiceStealEvent {
 	bySlotIndex: number;
 }
 
-// ─── Beat onset helper ────────────────────────────────────────────────────────
-
-/**
- * Beat onset times (seconds from pass start) for the given pattern and BPM. BPM
- * counts the meter's beat — a quarter, or a dotted quarter in 6/8 — so a beat
- * is always 60 / bpm long; the scheduler places the notes to match.
- */
-function computeBeatOnsets(pattern: FingerpickPattern, bpm: number): number[] {
-	const secondsPerBeat = 60 / bpm;
-	const totalDuration = getTotalPatternDuration(pattern, bpm);
-	const onsets: number[] = [];
-	for (let t = 0; t < totalDuration - 0.001; t += secondsPerBeat) {
-		onsets.push(t);
-	}
-	return onsets;
-}
-
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -338,7 +322,7 @@ export function useFingerpickAudioEngine() {
 	const metronomeGainRef = useRef(0.15);
 	const accentEnabledRef = useRef(true);
 	const noteGainRef = useRef(1.0);
-	const beatOnsetsRef = useRef<number[]>([]);
+	const beatOnsetsRef = useRef<Beat[]>([]);
 	const secondsPerBeatRef = useRef(0);
 	const timeSignatureRef = useRef<[number, number]>([4, 4]);
 
@@ -518,8 +502,9 @@ export function useFingerpickAudioEngine() {
 
 	/**
 	 * Schedule metronome ticks for one pass, skipping ticks before startOffset.
-	 * The beat is the meter's (a quarter, or a dotted quarter in 6/8); beats
-	 * 0, N, 2N, … are accented, N being the beats in a bar (two in 6/8).
+	 * The beat is the meter's (a quarter, or a dotted quarter in 6/8); a bar's
+	 * first beat is accented, the bars counted from the barlines (`beatGrid`),
+	 * so a pickup does not take the accent.
 	 * Subdivision density is controlled by metronomeSubdivisionRef:
 	 *   "beat"        — one click per beat
 	 *   "division"    — the beat's first division: 2 clicks per beat in a simple
@@ -531,7 +516,6 @@ export function useFingerpickAudioEngine() {
 		if (!ctx || !metronomeEnabledRef.current) return;
 
 		const timeSignature = timeSignatureRef.current;
-		const beatsPerMeasure = beatsPerBar(timeSignature);
 		const onsets = beatOnsetsRef.current;
 		const subdivision = metronomeSubdivisionRef.current;
 		const spb = secondsPerBeatRef.current;
@@ -541,9 +525,9 @@ export function useFingerpickAudioEngine() {
 		const clicksPerBeat =
 			subdivision === "beat" ? 1 : subdivision === "division" ? division : division * 2;
 
-		for (let i = 0; i < onsets.length; i++) {
-			const beatTime = onsets[i];
-			const isAccentBeat = accentEnabledRef.current && i % beatsPerMeasure === 0;
+		for (const beat of onsets) {
+			const beatTime = beat.time;
+			const isAccentBeat = accentEnabledRef.current && beat.downbeat;
 
 			// Beat tick — always scheduled
 			if (inPass(beatTime, bounds, startOffset)) {
@@ -701,7 +685,7 @@ export function useFingerpickAudioEngine() {
 		loopGapRef.current = options.loopGapSeconds ?? 0;
 		forceLetRingRef.current = options.forceLetRing ?? false;
 		timeSignatureRef.current = pattern.timeSignature;
-		beatOnsetsRef.current = computeBeatOnsets(pattern, bpm);
+		beatOnsetsRef.current = beatGrid(pattern, bpm);
 		secondsPerBeatRef.current = 60 / bpm;
 		startTimeRef.current = ctx.currentTime - toPassTime(from, boundsRef.current);
 		pausedAtRef.current = null;
@@ -931,7 +915,7 @@ export function useFingerpickAudioEngine() {
 
 		const newEvents = fingerpickPatternToScheduleEvents(pattern, newBpm, rollParamsRef.current);
 		const newPatternDuration = getTotalPatternDuration(pattern, newBpm);
-		const newBeatOnsets = computeBeatOnsets(pattern, newBpm);
+		const newBeatOnsets = beatGrid(pattern, newBpm);
 		secondsPerBeatRef.current = 60 / newBpm;
 
 		if (isPlayingRef.current) {

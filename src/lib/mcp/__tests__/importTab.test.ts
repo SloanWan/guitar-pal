@@ -99,6 +99,16 @@ describe("toImportedTabDraft", () => {
 		expect(short.warnings.map((w) => w.code)).toEqual(["BAR_UNDERFULL"]);
 	});
 
+	it("reads a short first bar as a pickup, and a short later bar as a misread", () => {
+		const pickup = { slots: AM_BAR.slots.slice(0, 1) };
+		const first = toImportedTabDraft(input({ bars: [pickup, AM_BAR] }), INDEX);
+		expect(first.warnings.map((w) => w.code)).toEqual(["PICKUP"]);
+		expect(first.warnings[0].message).toMatch(/Bar 1 holds 0\.5 quarter notes of 4 quarter notes: read as a pickup, leading straight into bar 2/);
+		const later = toImportedTabDraft(input({ bars: [AM_BAR, pickup] }), INDEX);
+		expect(later.warnings.map((w) => w.code)).toEqual(["BAR_UNDERFULL"]);
+		expect(later.warnings[0].message).toMatch(/Bar 2 holds .* so it plays short; a duration is missing/);
+	});
+
 	it("is an error when one slot strikes the same string twice", () => {
 		const { errors } = toImportedTabDraft(
 			input({

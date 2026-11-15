@@ -45,7 +45,7 @@ const PERKS: readonly { icon: typeof House; title: string; text: string }[] = [
 ];
 
 /* Every page the steps open, in their order; the assistant's link is the grammar it reads,
-   the MCP connector's the guide to adding it. */
+   the MCP connector's the guide to adding it, installing's the home-screen guide; then every guide. */
 const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
 	{ href: "/strum", label: "Strum" },
 	{ href: "/tab", label: "Tab" },
@@ -54,6 +54,8 @@ const FOOTER_PRODUCT: readonly { href: string; label: string }[] = [
 	{ href: "/docs/assistant-grammar", label: "Assistant" },
 	{ href: "/books/sample", label: "Books (preview)" },
 	{ href: "/docs/mcp", label: "MCP connector" },
+	{ href: "/docs/install", label: "Install the app" },
+	{ href: "/docs", label: "Docs" },
 ];
 
 const CREDITS: readonly { lead: string; href: string; label: string; tail?: string }[] = [

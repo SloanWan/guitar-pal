@@ -94,3 +94,60 @@ test("the support page's questions open and close", { tag: "@phone" }, async ({ 
 	await question.click();
 	await expect(answer).toBeHidden();
 });
+
+/** The docs index (#500): a card per guide, each guide linking back. */
+test("the docs index opens a guide, and the guide leads back", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/docs?lang=en");
+	await expect(page.getByRole("heading", { name: "Docs", level: 1 })).toBeVisible();
+	const card = page.getByRole("link", { name: /Connect Guitar Pal to your AI/ });
+	await hydrated(card);
+	await card.click();
+	await expect(page.getByRole("heading", { name: "Connect Guitar Pal to your AI", level: 1 })).toBeVisible();
+	await page.getByRole("link", { name: "All docs" }).click();
+	await expect(page).toHaveURL(/\/docs\?lang=en$/);
+	await expect(page.getByRole("link", { name: /What the assistant reads/ })).toBeVisible();
+});
+
+/** The install guide (#525): the device's own steps first, one platform at a time. */
+test("the install guide shows one device's steps at a time", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/docs/install?lang=en");
+	await expect(page.getByRole("heading", { name: "Add Guitar Pal to your home screen", level: 1 })).toBeVisible();
+	const devices = page.getByRole("radiogroup", { name: "Your device" });
+	await hydrated(devices);
+	await devices.getByRole("radio", { name: "iPhone / iPad" }).click();
+	await expect(page.getByText("Open Guitar Pal in Safari.", { exact: true })).toBeVisible();
+	await expect(page.getByRole("img", { name: /adding Guitar Pal from Safari's Share sheet/ })).toBeVisible();
+	await devices.getByRole("radio", { name: "Android" }).click();
+	await expect(page.getByText("Open Guitar Pal in Chrome.", { exact: true })).toBeVisible();
+	await expect(page.getByText("Open Guitar Pal in Safari.", { exact: true })).toHaveCount(0);
+	// A computer has no phone to act it out on.
+	await devices.getByRole("radio", { name: "Computer" }).click();
+	await expect(page.getByRole("img", { name: /Guitar Pal/ })).toHaveCount(0);
+	await expect(page.getByRole("heading", { name: "Needs a connection", level: 3 })).toBeVisible();
+
+	const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+	expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("the install guide reads in Chinese", async ({ page }) => {
+	await page.goto("/docs/install?lang=zh");
+	await expect(page.getByRole("heading", { name: "把 Guitar Pal 添加到主屏幕", level: 1 })).toBeVisible();
+	await expect(page.getByRole("radiogroup", { name: "你的设备" })).toBeVisible();
+});
+
+/** The landing's step 8 (#525): the add-to-home-screen demo, its steps pressed through, and the way to the guide. */
+test("the landing shows adding to the home screen, step by step", { tag: "@phone" }, async ({ page }) => {
+	await page.goto("/");
+	const step = page.getByRole("listitem").filter({ has: page.getByRole("heading", { name: "Keep it on your home screen.", level: 2 }) });
+	await step.scrollIntoViewIfNeeded();
+	const phones = step.getByRole("radiogroup", { name: "Your phone" });
+	await hydrated(phones);
+	await phones.getByRole("radio", { name: "Android" }).click();
+	const install = step.getByRole("button", { name: "Install app" });
+	await install.click();
+	await expect(install).toHaveAttribute("aria-current", "step");
+	await expect(step.getByRole("img", { name: /installing Guitar Pal from Chrome's menu/ })).toBeVisible();
+
+	await step.getByRole("link", { name: "How to add it" }).click();
+	await expect(page.getByRole("heading", { name: "Add Guitar Pal to your home screen", level: 1 })).toBeVisible();
+});

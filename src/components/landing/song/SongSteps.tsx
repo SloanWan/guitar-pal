@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
 	ArrowDownUp,
 	ArrowRight,
@@ -13,6 +13,7 @@ import {
 	ListMusic,
 	MessageCircle,
 	Plug,
+	Smartphone,
 	type LucideIcon,
 } from "lucide-react";
 import Link from "@/components/AppLink";
@@ -23,6 +24,8 @@ import { NeckLegend, type LegendItem } from "@/components/fretboard/parts";
 import RhythmGrid, { type RhythmPosition } from "@/components/strum/stage/RhythmGrid";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/chip";
+import { Segmented } from "@/components/ui/segmented";
+import InstallDemo, { type DemoPlatform } from "@/components/install/InstallDemo";
 import { ModuleBadge } from "@/components/ui/list-row";
 import { Pick } from "@/components/ui/pick";
 import { patternHandoff, stashHandoff } from "@/lib/assistant/handoff";
@@ -31,6 +34,7 @@ import { voicingToDiagramShape } from "@/lib/chordVoicing";
 import { chordTonesFromMidi, overlayChordTones } from "@/lib/fretboard/overlay";
 import { scaleMarks, scaleRootPitchClass, type ScaleSpec } from "@/lib/fretboard/scales";
 import type { FretWindow } from "@/lib/fretboard/types";
+import { platformFromUserAgent } from "@/lib/pwa/installPlatform";
 import { chordAbbreviation } from "@/lib/strumProgressions";
 import {
 	SONG,
@@ -526,7 +530,34 @@ function InYourChat() {
 	);
 }
 
-/** Steps one to seven: the song from a sentence to the player's hands, then the other ways in. */
+/* ---- 8 · On your home screen: installed, and playing with no signal ----- */
+
+const DEMO_PLATFORMS: readonly { value: DemoPlatform; label: string }[] = [
+	{ value: "ios", label: "iPhone" },
+	{ value: "android", label: "Android" },
+];
+
+const noSubscribe = () => () => {};
+
+function OnHomeScreen() {
+	// The landing is static: the phone's own steps are picked once hydrated, iPhone until then.
+	const detected = useSyncExternalStore<DemoPlatform>(
+		noSubscribe,
+		() => (platformFromUserAgent(navigator.userAgent) === "android" ? "android" : "ios"),
+		() => "ios",
+	);
+	const [chosen, setChosen] = useState<DemoPlatform | null>(null);
+	const platform = chosen ?? detected;
+	return (
+		<div className="flex flex-col gap-5">
+			<Segmented label="Your phone" options={DEMO_PLATFORMS} value={platform} onChange={setChosen} dense className="self-start" />
+			{/* A new phone starts its walk-through from the first step. */}
+			<InstallDemo key={platform} platform={platform} />
+		</div>
+	);
+}
+
+/** Steps one to eight: the song from a sentence to the player's hands, then the other ways in, then keeping it to hand. */
 export default function SongSteps() {
 	return (
 		<ol>
@@ -616,6 +647,18 @@ export default function SongSteps() {
 				as a connector. Guitar Pal checks what the AI read and turns it into a tab that plays. Import the ones you like
 				and they wait in one place, ready whenever you want to practise or come back to them. Works in AI apps that
 				support MCP connectors.
+			</Step>
+			<Step
+				n={8}
+				module="home"
+				icon={Smartphone}
+				tool="On your home screen"
+				title="Keep it on your home screen."
+				demo={<OnHomeScreen />}
+				link={{ href: "/docs/install", label: "How to add it" }}
+			>
+				Add Guitar Pal to your home screen and it opens like an app: its own icon, full screen, no app store. On a
+				plane or underground, Strum, Tab, Chords and Fretboard keep playing, and the sounds come along.
 			</Step>
 		</ol>
 	);

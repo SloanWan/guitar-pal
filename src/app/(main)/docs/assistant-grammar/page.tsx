@@ -38,5 +38,5 @@ export async function generateMetadata({ searchParams }: { searchParams: DocSear
 
 export default async function AssistantGrammarPage({ searchParams }: { searchParams: DocSearchParams }) {
 	const lang = await resolveDocLang(searchParams);
-	return <MarkdownDocPage lang={lang} doc={loadMarkdownDoc(DOC_FILES[lang])} tocLabel={COPY[lang].toc} />;
+	return <MarkdownDocPage lang={lang} doc={loadMarkdownDoc(DOC_FILES[lang])} tocLabel={COPY[lang].toc} guide />;
 }

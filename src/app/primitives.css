@@ -586,20 +586,21 @@
 	   ================================================================================= */
 
 	/* ---- title hover: a real italic and an underline grown from the left (spec §4) ----
-	   On a NavCard, a ListRow and a ghost button. Chinese has no italic face; the browser
+	   On a NavCard, a ListRow and a ghost button, and on a small text link marked .gp-lean
+	   (the menus' legal links; a menu item leans while highlighted). Chinese has no italic face; the browser
 	   slants it (font-synthesis-style). Selection never uses the italic — that is Lift. */
 	.gp-title {
 		background: linear-gradient(currentColor 0 0) 0 100% / 0 1.5px no-repeat;
 		transition: background-size var(--gp-d-underline) var(--gp-ease-state);
 	}
 	@media (hover: hover) {
-		:is(.gp-hop, .gp-btn[data-variant="ghost"]):not(:disabled):hover .gp-title {
+		:is(.gp-hop, .gp-btn[data-variant="ghost"], .gp-lean):not(:disabled):hover .gp-title {
 			font-style: italic;
 			font-synthesis-style: auto;
 			background-size: 100% 1.5px;
 		}
 	}
-	:is(.gp-hop, .gp-btn[data-variant="ghost"]):focus-visible .gp-title {
+	:is(.gp-hop, .gp-btn[data-variant="ghost"], .gp-lean):is(:focus-visible, [data-highlighted]) .gp-title {
 		font-style: italic;
 		font-synthesis-style: auto;
 		background-size: 100% 1.5px;
